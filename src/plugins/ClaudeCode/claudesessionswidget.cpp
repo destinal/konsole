@@ -15,14 +15,57 @@
 #include <QPainter>
 #include <QStackedLayout>
 #include <QStyledItemDelegate>
+#include <QTextLayout>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace
 {
 constexpr int padding = 6;
 constexpr int dotDiameter = 9;
+// Longer details end in an ellipsis; the tooltip has all of it.
+constexpr int maxDetailLines = 4;
 
-// Two lines per session: a dot, its title and its status; then the detail.
+// How wide the detail can be in a row of the given width: what is left
+// right of the dot.
+int detailWidth(int rowWidth)
+{
+    return rowWidth - 3 * padding - dotDiameter;
+}
+
+// The detail wrapped at word boundaries into at most maxDetailLines lines,
+// the last one elided when the rest does not fit.
+QStringList wrappedDetail(const QString &detail, const QFont &font, int width)
+{
+    QStringList lines;
+    if (detail.isEmpty() || width <= 0) {
+        return lines;
+    }
+    QTextLayout layout(detail, font);
+    QTextOption textOption;
+    textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    layout.setTextOption(textOption);
+    layout.beginLayout();
+    for (QTextLine line = layout.createLine(); line.isValid(); line = layout.createLine()) {
+        line.setLineWidth(width);
+        if (lines.size() == maxDetailLines - 1) {
+            lines << QFontMetrics(font).elidedText(detail.mid(line.textStart()), Qt::ElideRight, width);
+            break;
+        }
+        lines << detail.mid(line.textStart(), line.textLength()).trimmed();
+    }
+    layout.endLayout();
+    return lines;
+}
+
+QString detailText(const QModelIndex &index)
+{
+    return index.data(ClaudeSessionsModel::DetailRole).toString().simplified();
+}
+
+// A dot, the session's title and its status on the first line; then the
+// detail, wrapped, on the lines below.
 class SessionDelegate : public QStyledItemDelegate
 {
 public:
@@ -30,9 +73,14 @@ public:
 
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override
     {
-        Q_UNUSED(index)
+        // The row is as wide as the list, which the option does not always say.
+        const auto *view = qobject_cast<const QAbstractItemView *>(option.widget);
+        const int rowWidth = view != nullptr ? view->viewport()->width() : option.rect.width();
         const QFontMetrics metrics(option.font);
-        return QSize(option.rect.width(), 2 * padding + 2 * metrics.lineSpacing());
+        // Always room for one line of detail, so rows keep their height
+        // while a session has none.
+        const int detailLines = std::max<qsizetype>(1, wrappedDetail(detailText(index), option.font, detailWidth(rowWidth)).size());
+        return QSize(rowWidth, 2 * padding + (1 + detailLines) * metrics.lineSpacing());
     }
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override
@@ -82,13 +130,13 @@ public:
                           Qt::AlignLeft | Qt::AlignVCenter,
                           QFontMetrics(bold).elidedText(index.data().toString(), Qt::ElideRight, titleRect.width()));
 
-        // Detail, quieter, on the second line.
-        const QString detail = index.data(ClaudeSessionsModel::DetailRole).toString().simplified();
-        if (!detail.isEmpty()) {
-            painter->setFont(option.font);
-            painter->setPen(option.palette.color(group, selected ? QPalette::HighlightedText : QPalette::PlaceholderText));
-            const QRect detailRect(titleLeft, area.top() + lineHeight, area.right() - titleLeft, lineHeight);
-            painter->drawText(detailRect, Qt::AlignLeft | Qt::AlignVCenter, metrics.elidedText(detail, Qt::ElideRight, detailRect.width()));
+        // Detail, quieter, on the lines below.
+        const QStringList detailLines = wrappedDetail(detailText(index), option.font, detailWidth(option.rect.width()));
+        painter->setFont(option.font);
+        painter->setPen(option.palette.color(group, selected ? QPalette::HighlightedText : QPalette::PlaceholderText));
+        for (int i = 0; i < detailLines.size(); ++i) {
+            const QRect lineRect(titleLeft, area.top() + (i + 1) * lineHeight, detailWidth(option.rect.width()), lineHeight);
+            painter->drawText(lineRect, Qt::AlignLeft | Qt::AlignVCenter, detailLines.at(i));
         }
         painter->restore();
     }
@@ -119,11 +167,16 @@ ClaudeSessionsWidget::ClaudeSessionsWidget(ClaudeSessionsModel *model, ClaudeHoo
     _hooksBanner->addAction(install);
     connect(_hooks, &ClaudeHooks::installedChanged, this, &ClaudeSessionsWidget::updateHooksBanner);
 
+    auto *delegate = new SessionDelegate(_list);
     _list->setModel(model);
-    _list->setItemDelegate(new SessionDelegate(_list));
+    _list->setItemDelegate(delegate);
     _list->setSelectionMode(QAbstractItemView::NoSelection);
     _list->setMouseTracking(true);
-    _list->setUniformItemSizes(true);
+    // Rows grow with their detail, and rewrap when the panel is resized.
+    _list->setResizeMode(QListView::Adjust);
+    connect(model, &QAbstractItemModel::dataChanged, delegate, [delegate](const QModelIndex &topLeft) {
+        Q_EMIT delegate->sizeHintChanged(topLeft);
+    });
     _list->setFrameShape(QFrame::NoFrame);
     connect(_list, &QListView::clicked, this, [this](const QModelIndex &index) {
         if (Konsole::Session *session = _model->session(index)) {
