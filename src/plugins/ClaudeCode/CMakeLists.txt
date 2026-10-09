@@ -9,6 +9,7 @@ SOURCES
     programstatusrecords.cpp
     sessionstatus.cpp
     sessionstatusregistry.cpp
+    statusbadges.cpp
 INSTALL_NAMESPACE
     "konsoleplugins"
 )
@@ -18,6 +19,7 @@ target_link_libraries(konsole_claudecodeplugin
     konsoleprivate
     konsoleapp
     Qt::DBus
+    KF6::ConfigCore
     KF6::I18n
     KF6::Notifications
     KF6::WindowSystem

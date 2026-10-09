@@ -9,6 +9,7 @@
 #include "programstatusrecords.h"
 #include "sessionstatus.h"
 #include "sessionstatusregistry.h"
+#include "statusbadges.h"
 #include "statusnotifier.h"
 
 #include "MainWindow.h"
@@ -27,6 +28,7 @@ K_PLUGIN_CLASS_WITH_JSON(ClaudeCodePlugin, "konsole_claudecode.json")
 struct ClaudeCodePlugin::Private {
     SessionStatusRegistry *registry = nullptr;
     ClaudeSessionsModel *model = nullptr;
+    StatusBadges *badges = nullptr;
     QMap<Konsole::MainWindow *, QDockWidget *> dockForWindow;
 };
 
@@ -39,6 +41,7 @@ ClaudeCodePlugin::ClaudeCodePlugin(QObject *object, const QVariantList &args)
     priv->registry = new SessionStatusRegistry(this);
     priv->model = new ClaudeSessionsModel(priv->registry, this);
     new StatusNotifier(priv->registry, this);
+    priv->badges = new StatusBadges(priv->registry, this);
 
     // The session's tab shows its status as a colored dot.
     connect(priv->registry, &SessionStatusRegistry::statusChanged, this, [this](Konsole::Session *session) {
@@ -110,7 +113,15 @@ QList<QAction *> ClaudeCodePlugin::menuBarActions(Konsole::MainWindow *mainWindo
     mainWindow->actionCollection()->addAction(QStringLiteral("claudecode-show-sessions"), toggleVisibilityAction);
     mainWindow->actionCollection()->setDefaultShortcut(toggleVisibilityAction, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F3));
 
-    return {toggleVisibilityAction};
+    auto *badgesAction = new QAction(i18n("Show Status Badges"), mainWindow);
+    badgesAction->setCheckable(true);
+    badgesAction->setChecked(priv->badges->isEnabled());
+    mainWindow->actionCollection()->addAction(QStringLiteral("claudecode-show-badges"), badgesAction);
+    connect(badgesAction, &QAction::toggled, priv->badges, &StatusBadges::setEnabled);
+    // One setting for every window: keep each window's menu in step.
+    connect(priv->badges, &StatusBadges::enabledChanged, badgesAction, &QAction::setChecked);
+
+    return {toggleVisibilityAction, badgesAction};
 }
 
 #include "claudecodeplugin.moc"
