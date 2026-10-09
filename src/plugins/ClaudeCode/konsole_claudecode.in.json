@@ -1,0 +1,6 @@
+{
+    "KPlugin": {
+        "Name": "Claude Code",
+        "Version": "@RELEASE_SERVICE_VERSION@"
+    }
+}
