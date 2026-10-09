@@ -6,6 +6,9 @@
 
 #include <QHash>
 #include <QObject>
+#include <QString>
+
+#include <optional>
 
 namespace Konsole
 {
@@ -42,7 +45,7 @@ public:
 
 Q_SIGNALS:
     /** Something visible about @p session's status changed. */
-    void statusChanged(Konsole::Session *session);
+    void statusChanged(Konsole::Session *session, const std::optional<QString> &previousStatusText);
 
 private:
     void track(Konsole::Session *session);

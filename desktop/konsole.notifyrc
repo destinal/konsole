@@ -1649,3 +1649,13 @@ Comment[uk]=Запит оболонки ініціював сповіщення
 Comment[zh_CN]=外壳程序的提示触发了一条通知
 Comment[zh_TW]=shell 提示字元觸發了通知
 Action=Popup
+
+[Event/ClaudeCodeWaiting]
+Name=Claude Code Needs You
+Comment=A Claude Code session you are not looking at is waiting for you
+Action=Popup
+
+[Event/ClaudeCodeFinished]
+Name=Claude Code Finished
+Comment=A Claude Code session you are not looking at finished or failed
+Action=Popup

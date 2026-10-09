@@ -6,16 +6,31 @@
 
 #include <QWidget>
 
+class ClaudeSessionsModel;
+class QListView;
+class QStackedLayout;
+
 /**
- * The Claude Sessions panel: every Claude Code session in Konsole, with
- * its status. Empty for now.
+ * The Claude Sessions panel: every session that shows a status, in every
+ * Konsole window, the ones needing the user first. Clicking a row brings
+ * that session forward.
  */
 class ClaudeSessionsWidget : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit ClaudeSessionsWidget(QWidget *parent = nullptr);
+    explicit ClaudeSessionsWidget(ClaudeSessionsModel *model, QWidget *parent = nullptr);
+
+    /** Wide enough for a tab title and a status side by side. */
+    QSize sizeHint() const override;
+
+private:
+    void updatePlaceholder();
+
+    ClaudeSessionsModel *_model;
+    QListView *_list;
+    QStackedLayout *_stack;
 };
 
 #endif // CLAUDESESSIONSWIDGET_H

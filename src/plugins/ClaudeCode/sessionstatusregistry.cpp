@@ -70,8 +70,8 @@ void SessionStatusRegistry::track(Konsole::Session *session)
     });
     connect(session, &Konsole::Session::finished, programStatus, &ProgramStatusController::programExited);
     connect(session, &Konsole::Session::finished, status, &SessionStatus::programDidExit);
-    connect(status, &SessionStatus::changed, this, [this, session] {
-        Q_EMIT statusChanged(session);
+    connect(status, &SessionStatus::changed, this, [this, session](const std::optional<QString> &previousStatusText) {
+        Q_EMIT statusChanged(session, previousStatusText);
     });
     connect(session, &QObject::destroyed, this, [this, session] {
         // The status owns its program status controller.

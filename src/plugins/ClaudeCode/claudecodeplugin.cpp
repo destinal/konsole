@@ -3,13 +3,16 @@
 
 #include "claudecodeplugin.h"
 #include "claudecodedbus.h"
+#include "claudesessionsmodel.h"
 #include "claudesessionswidget.h"
 #include "konsoledebug.h"
 #include "programstatusrecords.h"
 #include "sessionstatus.h"
 #include "sessionstatusregistry.h"
+#include "statusnotifier.h"
 
 #include "MainWindow.h"
+#include "session/Session.h"
 #include "session/SessionController.h"
 #include "terminalDisplay/TerminalDisplay.h"
 
@@ -17,11 +20,13 @@
 #include <KLocalizedString>
 
 #include <QDockWidget>
+#include <QTimer>
 
 K_PLUGIN_CLASS_WITH_JSON(ClaudeCodePlugin, "konsole_claudecode.json")
 
 struct ClaudeCodePlugin::Private {
     SessionStatusRegistry *registry = nullptr;
+    ClaudeSessionsModel *model = nullptr;
     QMap<Konsole::MainWindow *, QDockWidget *> dockForWindow;
 };
 
@@ -32,6 +37,14 @@ ClaudeCodePlugin::ClaudeCodePlugin(QObject *object, const QVariantList &args)
     setName(QStringLiteral("ClaudeCode"));
 
     priv->registry = new SessionStatusRegistry(this);
+    priv->model = new ClaudeSessionsModel(priv->registry, this);
+    new StatusNotifier(priv->registry, this);
+
+    // The session's tab shows its status as a colored dot.
+    connect(priv->registry, &SessionStatusRegistry::statusChanged, this, [this](Konsole::Session *session) {
+        SessionStatus *status = priv->registry->status(session);
+        session->setStatusIndicator(status != nullptr && status->hasActiveStatus() ? status->indicator() : QColor());
+    });
     auto *dbus = new ClaudeCodeDBus(priv->registry, this);
     if (!dbus->registerObject()) {
         qCWarning(KonsoleDebug) << "Claude Code plugin could not register /ClaudeCode on D-Bus";
@@ -44,12 +57,24 @@ void ClaudeCodePlugin::createWidgetsForMainWindow(Konsole::MainWindow *mainWindo
 {
     auto *dock = new QDockWidget(mainWindow);
     dock->setWindowTitle(i18n("Claude Sessions"));
-    dock->setWidget(new ClaudeSessionsWidget(dock));
+    dock->setWidget(new ClaudeSessionsWidget(priv->model, dock));
     dock->setObjectName(QStringLiteral("ClaudeCodeDock"));
-    dock->setVisible(false);
     dock->setAllowedAreas(Qt::DockWidgetArea::LeftDockWidgetArea | Qt::DockWidgetArea::RightDockWidgetArea);
 
     mainWindow->addDockWidget(Qt::RightDockWidgetArea, dock);
+    // Hidden until asked for; adding a dock shows it. The window remembers the
+    // choice from then on.
+    dock->hide();
+    // A dock first shown after its window is laid out comes up at its minimum
+    // width; give it the room it asks for.
+    connect(dock, &QDockWidget::visibilityChanged, dock, [dock, mainWindow](bool visible) {
+        const int wanted = dock->widget()->sizeHint().width();
+        if (visible && dock->width() < wanted) {
+            QTimer::singleShot(0, dock, [dock, mainWindow, wanted] {
+                mainWindow->resizeDocks({dock}, {wanted}, Qt::Horizontal);
+            });
+        }
+    });
     priv->dockForWindow[mainWindow] = dock;
     connect(mainWindow, &QObject::destroyed, this, [this, mainWindow] {
         priv->dockForWindow.remove(mainWindow);
@@ -78,12 +103,12 @@ void ClaudeCodePlugin::activeViewChanged(Konsole::SessionController *controller,
 
 QList<QAction *> ClaudeCodePlugin::menuBarActions(Konsole::MainWindow *mainWindow) const
 {
-    auto *toggleVisibilityAction = new QAction(i18n("Show Claude Sessions"), mainWindow);
-    toggleVisibilityAction->setCheckable(true);
+    // The dock's own toggle action, which always agrees with whether the dock shows.
+    QDockWidget *dock = priv->dockForWindow[mainWindow];
+    QAction *toggleVisibilityAction = dock->toggleViewAction();
+    toggleVisibilityAction->setText(i18n("Show Claude Sessions"));
     mainWindow->actionCollection()->addAction(QStringLiteral("claudecode-show-sessions"), toggleVisibilityAction);
     mainWindow->actionCollection()->setDefaultShortcut(toggleVisibilityAction, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F3));
-    connect(toggleVisibilityAction, &QAction::triggered, priv->dockForWindow[mainWindow], &QDockWidget::setVisible);
-    connect(priv->dockForWindow[mainWindow], &QDockWidget::visibilityChanged, toggleVisibilityAction, &QAction::setChecked);
 
     return {toggleVisibilityAction};
 }

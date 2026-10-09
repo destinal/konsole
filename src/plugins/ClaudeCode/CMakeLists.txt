@@ -2,7 +2,10 @@ kcoreaddons_add_plugin(konsole_claudecodeplugin
 SOURCES
     claudecodeplugin.cpp
     claudecodedbus.cpp
+    claudesessionsmodel.cpp
     claudesessionswidget.cpp
+    sessionnavigation.cpp
+    statusnotifier.cpp
     programstatusrecords.cpp
     sessionstatus.cpp
     sessionstatusregistry.cpp
@@ -15,6 +18,9 @@ target_link_libraries(konsole_claudecodeplugin
     konsoleprivate
     konsoleapp
     Qt::DBus
+    KF6::I18n
+    KF6::Notifications
+    KF6::WindowSystem
 )
 target_compile_definitions(konsole_claudecodeplugin PRIVATE -DRELEASE_SERVICE_VERSION="${RELEASE_SERVICE_VERSION}")
 
