@@ -129,6 +129,7 @@ Session::Session(QObject *parent)
 
     connect(_emulation, &Konsole::Emulation::sessionAttributeChanged, this, &Konsole::Session::setSessionAttribute);
     connect(_emulation, &Konsole::Emulation::osc777Received, this, &Konsole::Session::handleOsc777);
+    connect(_emulation, &Konsole::Emulation::userVarChanged, this, &Konsole::Session::setUserVar);
     connect(_emulation, &Konsole::Emulation::bell, this, [this]() {
         Q_EMIT bellRequest(i18n("Bell in '%1' (Session '%2')", _displayTitle, _nameTitle));
         this->setPendingNotification(Notification::Bell);
@@ -2427,6 +2428,38 @@ void Session::setTabColor(const QString &colorName)
 QString Session::tabColor() const
 {
     return _tabColor.name();
+}
+
+QString Session::userVar(const QString &name) const
+{
+    return _userVars.value(name);
+}
+
+void Session::setUserVar(const QString &name, const QString &value)
+{
+    // Bound what a program can make the session hold.
+    constexpr int maxUserVars = 256;
+    constexpr int maxUserVarLength = 64 * 1024;
+    static const QRegularExpression nameRe(QStringLiteral("^[-a-zA-Z0-9_+.]+$"));
+
+    if (!nameRe.match(name).hasMatch() || value.size() > maxUserVarLength) {
+        return;
+    }
+    const auto existing = _userVars.constFind(name);
+    if (existing == _userVars.cend() && _userVars.size() >= maxUserVars) {
+        return;
+    }
+    if (existing != _userVars.cend() && *existing == value) {
+        return;
+    }
+
+    _userVars.insert(name, value);
+    Q_EMIT userVarChanged(name, value);
+}
+
+QStringList Session::userVarNames() const
+{
+    return _userVars.keys();
 }
 
 void Session::setActivityColor(const QColor &color)

@@ -1670,6 +1670,20 @@ void Vt102Emulation::processSessionAttributeRequest(const int tokenSize, const u
     }
 
     if (attribute == Image) {
+        // printf '\e]1337;SetUserVar=%s=%s\a' name "$(printf %s value | base64 -w0)"
+        const QLatin1String setUserVar("SetUserVar=");
+        if (value.startsWith(setUserVar)) {
+            const QStringView assignment = QStringView(value).mid(setUserVar.size());
+            const qsizetype separator = assignment.indexOf(QLatin1Char('='));
+            const QString name = (separator < 0 ? assignment : assignment.left(separator)).toString();
+            const QByteArray encoded = separator < 0 ? QByteArray() : assignment.mid(separator + 1).toLatin1();
+            const auto decoded = QByteArray::fromBase64Encoding(encoded, QByteArray::AbortOnBase64DecodingErrors);
+            if (!name.isEmpty() && isIdentifier(name) && decoded) {
+                Q_EMIT userVarChanged(name, QString::fromUtf8(decoded.decoded));
+            }
+            return;
+        }
+
         bool inlineImage = false;
         bool inlineMedia = false;
         if (value.startsWith(QLatin1String("ReportCellSize"))) {

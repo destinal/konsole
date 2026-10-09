@@ -799,6 +799,40 @@ void Vt102EmulationTest::testProgressStates()
     QCOMPARE(reports, expected);
 }
 
+void Vt102EmulationTest::testSetUserVar()
+{
+    TestEmulation em;
+    em.reset();
+    em.setCodec(TestEmulation::Utf8Codec);
+
+    QList<QPair<QString, QString>> vars;
+    connect(&em, &Emulation::userVarChanged, this, [&vars](const QString &name, const QString &value) {
+        vars.append({name, value});
+    });
+    auto send = [&em](const char *sequence) {
+        em.receiveData(sequence, strlen(sequence));
+    };
+
+    // "d29ya2luZw==" is "working"; "w6k=" is "\u00e9" in UTF-8.
+    send("\033]1337;SetUserVar=cc_status=d29ya2luZw==\007");
+    send("\033]1337;SetUserVar=accent=w6k=\033\\");
+    // A variable with no value is set to the empty string.
+    send("\033]1337;SetUserVar=empty=\007");
+    send("\033]1337;SetUserVar=bare\007");
+    // Invalid base64 and invalid names are ignored.
+    send("\033]1337;SetUserVar=bad=not*base64\007");
+    send("\033]1337;SetUserVar=bad name=d29ya2luZw==\007");
+    send("\033]1337;SetUserVar==d29ya2luZw==\007");
+
+    const QList<QPair<QString, QString>> expected = {
+        {QStringLiteral("cc_status"), QStringLiteral("working")},
+        {QStringLiteral("accent"), QString(QChar(0xe9))},
+        {QStringLiteral("empty"), QString()},
+        {QStringLiteral("bare"), QString()},
+    };
+    QCOMPARE(vars, expected);
+}
+
 QTEST_GUILESS_MAIN(Vt102EmulationTest)
 
 #include "moc_Vt102EmulationTest.cpp"

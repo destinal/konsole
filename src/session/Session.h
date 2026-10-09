@@ -848,6 +848,16 @@ public Q_SLOTS:
     Q_SCRIPTABLE QString tabColor() const;
     Q_SCRIPTABLE void setTabColor(const QString &colorName);
 
+    /**
+     * Sets/gets a user-defined variable, as set by programs with the
+     * escape sequence OSC 1337 ; SetUserVar=<name>=<base64 value>.
+     * Names are limited to letters, digits and -_+. ; a session holds at
+     * most 256 variables of up to 64 KiB each.
+     */
+    Q_SCRIPTABLE QString userVar(const QString &name) const;
+    Q_SCRIPTABLE void setUserVar(const QString &name, const QString &value);
+    Q_SCRIPTABLE QStringList userVarNames() const;
+
 Q_SIGNALS:
 
     /** Emitted when the terminal process starts. */
@@ -863,6 +873,9 @@ Q_SIGNALS:
      * See setSessionAttribute().
      */
     void sessionAttributeChanged();
+
+    /** Emitted when a user-defined variable is set to a new value. */
+    void userVarChanged(const QString &name, const QString &value);
 
     /** Emitted when the session gets locked / unlocked. */
     void readOnlyChanged();
@@ -1065,6 +1078,8 @@ private:
     bool _tabTitleSetByUser = false;
     bool _tabColorSetByUser = false;
     bool _tabActivityColorSetByUser = false;
+
+    QHash<QString, QString> _userVars;
 
     // Badge properties
     bool _badgeEnabled = false;

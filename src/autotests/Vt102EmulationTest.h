@@ -45,6 +45,7 @@ private Q_SLOTS:
     void testKittyKeyboardTextKeys();
 
     void testProgressStates();
+    void testSetUserVar();
 
 private:
     static void sendAndCompare(TestEmulation *em, const char *input, size_t inputLen, const QString &expectedPrint, const QByteArray &expectedSent);

@@ -446,6 +446,16 @@ Q_SIGNALS:
     void osc777Received(const QStringList &params);
 
     /**
+     * Emitted after receiving the iTerm2 escape sequence
+     * OSC 1337 ; SetUserVar=<name>=<base64 value>, which sets a
+     * user-defined variable on the session.
+     *
+     * @param name The variable name
+     * @param value The decoded value; empty when the sequence carried none
+     */
+    void userVarChanged(const QString &name, const QString &value);
+
+    /**
      * Mainly used to communicate dropped lines to active autosave tasks.
      * Takes into account lines dropped by Screen::addHistLine and Screen::fastAddHistLine.
      * Also includes lines dropped by clearing scrollback and resetting the screen.
