@@ -1,5 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Eric Duprey <509630+destinal@users.noreply.github.com>
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: George Nachman and the iTerm2 authors
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// Ported from iTerm2's ProgramStatusTests.
 
 // Ports the record-model tests of iTerm2 (ProgramStatusTests) and checks how
 // OSC 7501 records share a session's status with the hooks.
