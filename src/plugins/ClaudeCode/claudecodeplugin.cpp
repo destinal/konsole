@@ -3,6 +3,7 @@
 
 #include "claudecodeplugin.h"
 #include "claudecodedbus.h"
+#include "claudehooks.h"
 #include "claudesessionsmodel.h"
 #include "claudesessionswidget.h"
 #include "clippingstore.h"
@@ -24,6 +25,7 @@
 
 #include <KActionCollection>
 #include <KLocalizedString>
+#include <KMessageBox>
 
 #include <QDockWidget>
 #include <QTimer>
@@ -36,6 +38,7 @@ struct ClaudeCodePlugin::Private {
     StatusBadges *badges = nullptr;
     WorkgroupManager *workgroups = nullptr;
     ClippingStore *clippings = nullptr;
+    ClaudeHooks *hooks = nullptr;
     QMap<Konsole::MainWindow *, QDockWidget *> dockForWindow;
     QMap<Konsole::MainWindow *, QDockWidget *> clippingsDockForWindow;
     QMap<Konsole::MainWindow *, ClippingsWidget *> clippingsForWindow;
@@ -52,6 +55,7 @@ ClaudeCodePlugin::ClaudeCodePlugin(QObject *object, const QVariantList &args)
     new StatusNotifier(priv->registry, this);
     priv->badges = new StatusBadges(priv->registry, this);
     priv->clippings = new ClippingStore(this);
+    priv->hooks = new ClaudeHooks(this);
     priv->workgroups = new WorkgroupManager(priv->registry, priv->clippings, this);
 
     // New findings bring up the Clippings panel of each window showing them.
@@ -80,7 +84,7 @@ void ClaudeCodePlugin::createWidgetsForMainWindow(Konsole::MainWindow *mainWindo
 {
     auto *dock = new QDockWidget(mainWindow);
     dock->setWindowTitle(i18n("Claude Sessions"));
-    dock->setWidget(new ClaudeSessionsWidget(priv->model, dock));
+    dock->setWidget(new ClaudeSessionsWidget(priv->model, priv->hooks, dock));
     dock->setObjectName(QStringLiteral("ClaudeCodeDock"));
     dock->setAllowedAreas(Qt::DockWidgetArea::LeftDockWidgetArea | Qt::DockWidgetArea::RightDockWidgetArea);
 
@@ -220,8 +224,25 @@ QList<QAction *> ClaudeCodePlugin::menuBarActions(Konsole::MainWindow *mainWindo
     connect(autoEnterAction, &QAction::toggled, priv->workgroups, &WorkgroupManager::setAutoEnter);
     connect(priv->workgroups, &WorkgroupManager::autoEnterChanged, autoEnterAction, &QAction::setChecked);
 
+    // Add or remove the hooks in Claude Code's settings, telling the user how it went.
+    auto hookAction = [this, mainWindow](const QString &text, const QString &name, const QString &command) {
+        auto *action = new QAction(text, mainWindow);
+        mainWindow->actionCollection()->addAction(name, action);
+        connect(action, &QAction::triggered, this, [this, mainWindow, command] {
+            QString output;
+            if (priv->hooks->run(command, &output)) {
+                KMessageBox::information(mainWindow, output, i18n("Claude Code Hooks"));
+            } else {
+                KMessageBox::error(mainWindow, output, i18n("Claude Code Hooks"));
+            }
+        });
+        return action;
+    };
+    QAction *installHooks = hookAction(i18n("Install Claude Code Hooks"), QStringLiteral("claudecode-install-hooks"), QStringLiteral("install"));
+    QAction *uninstallHooks = hookAction(i18n("Uninstall Claude Code Hooks"), QStringLiteral("claudecode-uninstall-hooks"), QStringLiteral("uninstall"));
+
     return QList<QAction *>{toggleVisibilityAction, clippingsAction, badgesAction, enterAction, exitAction} + memberActions
-        + QList<QAction *>{autoEnterAction, autoSendAction};
+        + QList<QAction *>{autoEnterAction, autoSendAction, installHooks, uninstallHooks};
 }
 
 #include "claudecodeplugin.moc"

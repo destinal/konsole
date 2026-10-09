@@ -6,7 +6,9 @@
 
 #include <QWidget>
 
+class ClaudeHooks;
 class ClaudeSessionsModel;
+class KMessageWidget;
 class QListView;
 class QStackedLayout;
 
@@ -20,15 +22,18 @@ class ClaudeSessionsWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit ClaudeSessionsWidget(ClaudeSessionsModel *model, QWidget *parent = nullptr);
+    ClaudeSessionsWidget(ClaudeSessionsModel *model, ClaudeHooks *hooks, QWidget *parent = nullptr);
 
     /** Wide enough for a tab title and a status side by side. */
     QSize sizeHint() const override;
 
 private:
     void updatePlaceholder();
+    void updateHooksBanner();
 
     ClaudeSessionsModel *_model;
+    ClaudeHooks *_hooks;
+    KMessageWidget *_hooksBanner;
     QListView *_list;
     QStackedLayout *_stack;
 };

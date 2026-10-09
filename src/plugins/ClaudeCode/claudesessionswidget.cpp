@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "claudesessionswidget.h"
+#include "claudehooks.h"
 #include "claudesessionsmodel.h"
 #include "sessionnavigation.h"
 
 #include <KLocalizedString>
+#include <KMessageWidget>
 
 #include <QApplication>
 #include <QLabel>
@@ -13,6 +15,7 @@
 #include <QPainter>
 #include <QStackedLayout>
 #include <QStyledItemDelegate>
+#include <QVBoxLayout>
 
 namespace
 {
@@ -92,12 +95,30 @@ public:
 };
 }
 
-ClaudeSessionsWidget::ClaudeSessionsWidget(ClaudeSessionsModel *model, QWidget *parent)
+ClaudeSessionsWidget::ClaudeSessionsWidget(ClaudeSessionsModel *model, ClaudeHooks *hooks, QWidget *parent)
     : QWidget(parent)
     , _model(model)
+    , _hooks(hooks)
+    , _hooksBanner(new KMessageWidget(this))
     , _list(new QListView(this))
-    , _stack(new QStackedLayout(this))
+    , _stack(new QStackedLayout())
 {
+    // Offer the hooks when they are missing; they are what fills in details
+    // and background work.
+    _hooksBanner->setMessageType(KMessageWidget::Information);
+    _hooksBanner->setWordWrap(true);
+    _hooksBanner->setText(i18n("Install the Claude Code hooks to see what Claude is doing in more detail, including background work."));
+    auto *install = new QAction(QIcon::fromTheme(QStringLiteral("run-install")), i18n("Install Hooks"), _hooksBanner);
+    connect(install, &QAction::triggered, this, [this] {
+        QString output;
+        if (!_hooks->run(QStringLiteral("install"), &output)) {
+            _hooksBanner->setMessageType(KMessageWidget::Error);
+            _hooksBanner->setText(output);
+        }
+    });
+    _hooksBanner->addAction(install);
+    connect(_hooks, &ClaudeHooks::installedChanged, this, &ClaudeSessionsWidget::updateHooksBanner);
+
     _list->setModel(model);
     _list->setItemDelegate(new SessionDelegate(_list));
     _list->setSelectionMode(QAbstractItemView::NoSelection);
@@ -118,6 +139,12 @@ ClaudeSessionsWidget::ClaudeSessionsWidget(ClaudeSessionsModel *model, QWidget *
     _stack->addWidget(placeholder);
     _stack->addWidget(_list);
 
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(_hooksBanner);
+    layout->addLayout(_stack, 1);
+    updateHooksBanner();
+
     connect(model, &QAbstractItemModel::modelReset, this, &ClaudeSessionsWidget::updatePlaceholder);
     connect(model, &QAbstractItemModel::rowsInserted, this, &ClaudeSessionsWidget::updatePlaceholder);
     connect(model, &QAbstractItemModel::rowsRemoved, this, &ClaudeSessionsWidget::updatePlaceholder);
@@ -127,6 +154,11 @@ ClaudeSessionsWidget::ClaudeSessionsWidget(ClaudeSessionsModel *model, QWidget *
 QSize ClaudeSessionsWidget::sizeHint() const
 {
     return QSize(fontMetrics().averageCharWidth() * 36, QWidget::sizeHint().height());
+}
+
+void ClaudeSessionsWidget::updateHooksBanner()
+{
+    _hooksBanner->setVisible(!_hooks->isInstalled());
 }
 
 void ClaudeSessionsWidget::updatePlaceholder()
