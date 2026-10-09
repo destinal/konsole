@@ -3,6 +3,8 @@ SOURCES
     claudecodeplugin.cpp
     claudecodedbus.cpp
     claudesessionswidget.cpp
+    sessionstatus.cpp
+    sessionstatusregistry.cpp
 INSTALL_NAMESPACE
     "konsoleplugins"
 )
@@ -14,3 +16,9 @@ target_link_libraries(konsole_claudecodeplugin
     Qt::DBus
 )
 target_compile_definitions(konsole_claudecodeplugin PRIVATE -DRELEASE_SERVICE_VERSION="${RELEASE_SERVICE_VERSION}")
+
+add_subdirectory(it2)
+
+if(BUILD_TESTING)
+    add_subdirectory(autotests)
+endif()

@@ -1,0 +1,25 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Eric Duprey <509630+destinal@users.noreply.github.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Claude Code hook for Konsole's Claude Code plugin. Point every hook event
+# that iTerm2's integration uses at this script.
+#
+# It runs iTerm2's cc-status, which turns each hook event into an
+# `it2 set-status` call, with the it2 next to it, which forwards the call to
+# the plugin over D-Bus.
+
+# Outside Konsole there is nothing to report to. Drain the payload so Claude
+# Code never writes into a closed pipe.
+if [ -z "$KONSOLE_DBUS_SERVICE" ] || [ -z "$KONSOLE_DBUS_SESSION" ]; then
+    cat >/dev/null
+    exit 0
+fi
+
+# cc-status names the session by $TERM_SESSION_ID (whatever follows the first
+# colon) and only runs it2 once $IT2_SOCK says there is something to reach.
+TERM_SESSION_ID="konsole:${KONSOLE_DBUS_SERVICE}${KONSOLE_DBUS_SESSION}"
+IT2_SOCK=konsole
+export TERM_SESSION_ID IT2_SOCK
+
+exec "$(dirname "$(readlink -f "$0")")/cc-status" "$@"

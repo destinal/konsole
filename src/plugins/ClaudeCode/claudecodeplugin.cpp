@@ -5,8 +5,12 @@
 #include "claudecodedbus.h"
 #include "claudesessionswidget.h"
 #include "konsoledebug.h"
+#include "sessionstatus.h"
+#include "sessionstatusregistry.h"
 
 #include "MainWindow.h"
+#include "session/SessionController.h"
+#include "terminalDisplay/TerminalDisplay.h"
 
 #include <KActionCollection>
 #include <KLocalizedString>
@@ -16,6 +20,7 @@
 K_PLUGIN_CLASS_WITH_JSON(ClaudeCodePlugin, "konsole_claudecode.json")
 
 struct ClaudeCodePlugin::Private {
+    SessionStatusRegistry *registry = nullptr;
     QMap<Konsole::MainWindow *, QDockWidget *> dockForWindow;
 };
 
@@ -25,7 +30,8 @@ ClaudeCodePlugin::ClaudeCodePlugin(QObject *object, const QVariantList &args)
 {
     setName(QStringLiteral("ClaudeCode"));
 
-    auto *dbus = new ClaudeCodeDBus(this);
+    priv->registry = new SessionStatusRegistry(this);
+    auto *dbus = new ClaudeCodeDBus(priv->registry, this);
     if (!dbus->registerObject()) {
         qCWarning(KonsoleDebug) << "Claude Code plugin could not register /ClaudeCode on D-Bus";
     }
@@ -51,8 +57,17 @@ void ClaudeCodePlugin::createWidgetsForMainWindow(Konsole::MainWindow *mainWindo
 
 void ClaudeCodePlugin::activeViewChanged(Konsole::SessionController *controller, Konsole::MainWindow *mainWindow)
 {
-    Q_UNUSED(controller)
     Q_UNUSED(mainWindow)
+    if (controller == nullptr || controller->view() == nullptr) {
+        return;
+    }
+    // A key press in a session showing a finished or failed turn means the
+    // user has seen it. Only the active view takes keys, so connecting here
+    // covers every view that ever does.
+    SessionStatus *status = priv->registry->status(controller->session());
+    if (status != nullptr) {
+        connect(controller->view(), &Konsole::TerminalDisplay::keyPressedSignal, status, &SessionStatus::userDidPressKey, Qt::UniqueConnection);
+    }
 }
 
 QList<QAction *> ClaudeCodePlugin::menuBarActions(Konsole::MainWindow *mainWindow) const
