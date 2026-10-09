@@ -153,6 +153,13 @@ private Q_SLOTS:
 
     // OSC 21337.
     void testTabStatusUpdateConverts();
+
+    // The shown detail, which iTerm2's model does not have.
+    void testClearedDetailStaysShownWhileTheStatusHolds();
+    void testBareDoneKeepsTheSummaryEitherWayRound();
+    void testNewStatusDropsTheShownDetail();
+    void testSeenResultKeepsItsSummary();
+    void testClearAndExitDropTheShownDetail();
 };
 
 void SessionStatusTest::testTurnOpenArgument()
@@ -751,6 +758,91 @@ void SessionStatusTest::testTabStatusUpdateConverts()
     settle();
     // No then- keys: the status is cleared.
     QVERIFY(!status.hasActiveStatus());
+}
+
+namespace
+{
+StatusUpdate withDetail(const QString &status, const QString &detail)
+{
+    StatusUpdate update = withStatus(status);
+    update.fields.detail = detail;
+    return update;
+}
+}
+
+void SessionStatusTest::testClearedDetailStaysShownWhileTheStatusHolds()
+{
+    // A tool's description while it runs, then the bare report when it ends.
+    SessionStatus status;
+    status.apply(withDetail(QStringLiteral("working"), QStringLiteral("Running the tests")));
+    QSignalSpy changed(&status, &SessionStatus::changed);
+    status.apply(withDetail(QStringLiteral("working"), QString()));
+    QCOMPARE(status.detail(), std::nullopt);
+    QCOMPARE(status.shownDetail(), QStringLiteral("Running the tests"));
+    QCOMPARE(status.toJson().value(QStringLiteral("detail")).isNull(), true);
+    // Only the detail changed, and the shown one did not.
+    QCOMPARE(changed.count(), 1);
+
+    // The next tool's description replaces it.
+    status.apply(withDetail(QStringLiteral("working"), QStringLiteral("Reading main.cpp")));
+    QCOMPARE(status.shownDetail(), QStringLiteral("Reading main.cpp"));
+}
+
+void SessionStatusTest::testBareDoneKeepsTheSummaryEitherWayRound()
+{
+    // The Stop hook's summary, then Claude Code's own done report.
+    SessionStatus hookFirst;
+    hookFirst.apply(withDetail(QStringLiteral("working"), QStringLiteral("Running the tests")));
+    hookFirst.apply(withDetail(QStringLiteral("done"), QStringLiteral("Fixed the parser")));
+    hookFirst.apply(withDetail(QStringLiteral("done"), QString()));
+    QCOMPARE(hookFirst.shownDetail(), QStringLiteral("Fixed the parser"));
+
+    // The other way round: the done report ends the tool's description, and
+    // the summary arrives after it.
+    SessionStatus reportFirst;
+    reportFirst.apply(withDetail(QStringLiteral("working"), QStringLiteral("Running the tests")));
+    reportFirst.apply(withDetail(QStringLiteral("done"), QString()));
+    QCOMPARE(reportFirst.shownDetail(), std::nullopt);
+    reportFirst.apply(withDetail(QStringLiteral("done"), QStringLiteral("Fixed the parser")));
+    QCOMPARE(reportFirst.shownDetail(), QStringLiteral("Fixed the parser"));
+}
+
+void SessionStatusTest::testNewStatusDropsTheShownDetail()
+{
+    SessionStatus status;
+    status.apply(withDetail(QStringLiteral("done"), QStringLiteral("Fixed the parser")));
+    status.apply(withDetail(QStringLiteral("working"), QString()));
+    QCOMPARE(status.shownDetail(), std::nullopt);
+
+    // Interrupted: idle after working is not a result being seen.
+    status.apply(withDetail(QStringLiteral("working"), QStringLiteral("Running the tests")));
+    status.apply(withDetail(QStringLiteral("idle"), QString()));
+    QCOMPARE(status.shownDetail(), std::nullopt);
+}
+
+void SessionStatusTest::testSeenResultKeepsItsSummary()
+{
+    // A summary only the shown detail still holds survives the key press.
+    SessionStatus status;
+    status.apply(withDetail(QStringLiteral("done"), QStringLiteral("Fixed the parser")));
+    status.apply(withDetail(QStringLiteral("done"), QString()));
+    status.userDidPressKey();
+    QCOMPARE(text(status), QStringLiteral("idle"));
+    QCOMPARE(status.shownDetail(), QStringLiteral("Fixed the parser"));
+}
+
+void SessionStatusTest::testClearAndExitDropTheShownDetail()
+{
+    SessionStatus cleared;
+    cleared.apply(withDetail(QStringLiteral("working"), QStringLiteral("Running the tests")));
+    cleared.apply(withDetail(QStringLiteral("working"), QString()));
+    QVERIFY(cleared.clearStatus());
+    QCOMPARE(cleared.shownDetail(), std::nullopt);
+
+    SessionStatus exited;
+    exited.apply(withDetail(QStringLiteral("working"), QStringLiteral("Running the tests")));
+    exited.programDidExit();
+    QCOMPARE(exited.shownDetail(), std::nullopt);
 }
 
 QTEST_GUILESS_MAIN(SessionStatusTest)

@@ -88,6 +88,16 @@ public:
     /** Invalid when there is no status text color. */
     QColor statusColor() const;
     std::optional<QString> detail() const;
+    /**
+     * The detail to show people: the detail, or when an update cleared it
+     * without changing the status, the last one there was. Claude Code
+     * reports what a tool is doing only while it runs, and its own done
+     * report carries no message, so the detail alone would blink and lose
+     * the turn's summary. A new status clears it, except a finished one the
+     * user has seen, which keeps its summary as iTerm2's does. Not part of
+     * iTerm2's model, so detail() and toJson() leave it out.
+     */
+    std::optional<QString> shownDetail() const;
     qint64 backgroundTasks() const;
     std::optional<bool> turnOpen() const;
 
@@ -154,6 +164,7 @@ private:
     const int _progressEndDelayMs;
 
     Display _display;
+    std::optional<QString> _shownDetail;
     qint64 _backgroundTasks = 0;
     std::optional<bool> _turnOpen;
 

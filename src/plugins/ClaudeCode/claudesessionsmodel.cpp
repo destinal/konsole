@@ -43,8 +43,8 @@ QVariant ClaudeSessionsModel::data(const QModelIndex &index, int role) const
         return ClaudeCode::sessionTitle(session);
     case Qt::ToolTipRole: {
         QString tip = ClaudeCode::sessionTitle(session) + QLatin1String(" — ") + status->statusText().value_or(QString());
-        if (status->detail().has_value()) {
-            tip += QLatin1Char('\n') + *status->detail();
+        if (status->shownDetail().has_value()) {
+            tip += QLatin1Char('\n') + *status->shownDetail();
         }
         return tip;
     }
@@ -55,7 +55,7 @@ QVariant ClaudeSessionsModel::data(const QModelIndex &index, int role) const
     case IndicatorRole:
         return status->indicator();
     case DetailRole:
-        return status->detail().value_or(QString());
+        return status->shownDetail().value_or(QString());
     case SessionRole:
         return QVariant::fromValue<QObject *>(session);
     }

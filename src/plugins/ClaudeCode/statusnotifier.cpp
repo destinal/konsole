@@ -73,7 +73,7 @@ void StatusNotifier::statusChanged(Konsole::Session *session, const std::optiona
 
     auto *notification = new KNotification(event, KNotification::CloseWhenWindowActivated);
     notification->setTitle(i18nc("@title a Claude Code session, named by its tab title", "Claude Code — %1", ClaudeCode::sessionTitle(session)));
-    notification->setText(status->detail().value_or(fallbackText).toHtmlEscaped());
+    notification->setText(status->shownDetail().value_or(fallbackText).toHtmlEscaped());
     const auto views = session->views();
     if (!views.isEmpty() && views.first()->window()->windowHandle() != nullptr) {
         notification->setWindow(views.first()->window()->windowHandle());

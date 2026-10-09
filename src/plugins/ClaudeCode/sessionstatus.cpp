@@ -20,6 +20,13 @@ namespace
 const QColor idleIndicator(0x00, 0xd7, 0x5f);
 const QColor idleStatusColor(0x88, 0x88, 0x88);
 
+// A finished turn the user has seen: its summary is still worth showing.
+bool isSeenResult(const std::optional<QString> &before, const std::optional<QString> &after)
+{
+    const QString from = before.value_or(QString()).toLower();
+    return (from == QLatin1String("done") || from == QLatin1String("error")) && after.value_or(QString()).toLower() == QLatin1String("idle");
+}
+
 std::optional<QString> stringArgument(const QVariantMap &arguments, const char *key)
 {
     const auto it = arguments.constFind(QLatin1String(key));
@@ -196,6 +203,11 @@ std::optional<QString> SessionStatus::detail() const
     return _display.detail;
 }
 
+std::optional<QString> SessionStatus::shownDetail() const
+{
+    return _shownDetail;
+}
+
 qint64 SessionStatus::backgroundTasks() const
 {
     return _backgroundTasks;
@@ -313,7 +325,14 @@ bool SessionStatus::applyFields(const TabStatusFields &fields)
     if (fields.detail.has_value()) {
         _display.detail = fields.detail->isEmpty() ? std::nullopt : fields.detail;
     }
-    return !(_display == before);
+
+    const auto shownBefore = _shownDetail;
+    if (_display.detail.has_value()) {
+        _shownDetail = _display.detail;
+    } else if (_display.statusText != before.statusText && !isSeenResult(before.statusText, _display.statusText)) {
+        _shownDetail.reset();
+    }
+    return !(_display == before) || _shownDetail != shownBefore;
 }
 
 void SessionStatus::progressReported(const std::optional<TerminalProgress> &progress)
@@ -393,6 +412,7 @@ bool SessionStatus::clearStatus()
     ++_generation;
     const auto previousText = _display.statusText;
     _display = Display();
+    _shownDetail.reset();
     _backgroundTasks = 0;
     _turnOpen.reset();
     Q_EMIT changed(previousText);
@@ -404,6 +424,7 @@ void SessionStatus::programDidExit()
     const bool wasActive = hasActiveStatus();
     const auto previousText = _display.statusText;
     _display = Display();
+    _shownDetail.reset();
     _backgroundTasks = 0;
     _turnOpen.reset();
     _armedFallback.reset();
