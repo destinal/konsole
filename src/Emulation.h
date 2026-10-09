@@ -16,6 +16,7 @@
 
 // Konsole
 #include "Enumeration.h"
+#include "TabStatus.h"
 #include "TerminalProgress.h"
 #include "konsoleprivate_export.h"
 #include "terminalDisplay/TerminalDisplay.h"
@@ -454,6 +455,12 @@ Q_SIGNALS:
      * @param value The decoded value; empty when the sequence carried none
      */
     void userVarChanged(const QString &name, const QString &value);
+
+    /**
+     * Emitted after receiving the iTerm2 escape sequence OSC 21337, which
+     * sets the status shown for the session. See TabStatusUpdate.
+     */
+    void tabStatusReceived(const Konsole::TabStatusUpdate &update);
 
     /**
      * Mainly used to communicate dropped lines to active autosave tasks.

@@ -1872,6 +1872,11 @@ void Vt102Emulation::processSessionAttributeRequest(const int tokenSize, const u
         return;
     }
 
+    if (attribute == TabStatus) {
+        Q_EMIT tabStatusReceived(TabStatusUpdate::fromOsc21337(value));
+        return;
+    }
+
     if (attribute == ConEmu) {
         const auto list = QStringView(value).split(QLatin1Char(';'));
         if (list.size() >= 2) {

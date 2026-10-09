@@ -19,6 +19,7 @@ private Q_SLOTS:
     void testNoProfile();
     void testEmulation();
     void testUserVars();
+    void testTabStatus();
 
 private:
 };

@@ -833,6 +833,81 @@ void Vt102EmulationTest::testSetUserVar()
     QCOMPARE(vars, expected);
 }
 
+void Vt102EmulationTest::testTabStatusParsing()
+{
+    auto parse = [](const char *payload) {
+        return TabStatusUpdate::fromOsc21337(QString::fromUtf8(payload));
+    };
+    auto name = [](const std::optional<QColor> &color) {
+        return color.has_value() ? color->name() : QStringLiteral("unset");
+    };
+
+    // Fields that are set, and fields left alone.
+    auto update = parse("status=Working;indicator=#ffa500");
+    QCOMPARE(update.fields.status, QStringLiteral("Working"));
+    QCOMPARE(name(update.fields.indicator), QStringLiteral("#ffa500"));
+    QVERIFY(!update.fields.statusColor.has_value());
+    QVERIFY(!update.fields.detail.has_value());
+    QVERIFY(!update.expiresOnProgressEnd);
+
+    // An empty value clears a field.
+    update = parse("status=;indicator=");
+    QCOMPARE(update.fields.status, QString());
+    QVERIFY(update.fields.indicator.has_value() && !update.fields.indicator->isValid());
+
+    // "\;" and "\\" are escapes; other backslashes are kept.
+    update = parse("detail=a\\;b\\\\c\\x;status=s");
+    QCOMPARE(update.fields.detail, QStringLiteral("a;b\\c\\x"));
+    QCOMPARE(update.fields.status, QStringLiteral("s"));
+
+    // xterm colors with 1, 2 and 4 hex digits per component.
+    QCOMPARE(name(parse("indicator=rgb:f/8/0").fields.indicator), QStringLiteral("#ff8800"));
+    QCOMPARE(name(parse("indicator=rgb:ff/80/00").fields.indicator), QStringLiteral("#ff8000"));
+    QCOMPARE(name(parse("status-color=rgb:ffff/0000/8080").fields.statusColor), QStringLiteral("#ff0080"));
+
+    // Colors that do not parse leave the field alone; unknown keys are ignored.
+    QVERIFY(!parse("indicator=orange").fields.indicator.has_value());
+    QVERIFY(!parse("indicator=rgb:ff/0x1/00").fields.indicator.has_value());
+    QVERIFY(!parse("indicator=rgb:fffff/0/0").fields.indicator.has_value());
+    QCOMPARE(parse("foo=bar;baz").fields, TabStatusFields());
+
+    // Expiring without then- keys clears everything on expiry.
+    update = parse("status=working;expires-on=progress-end");
+    QVERIFY(update.expiresOnProgressEnd);
+    QCOMPARE(update.fallback, TabStatusFields::cleared());
+
+    // then- keys name what replaces the status.
+    update = parse("status=working;expires-on=progress-end;then-status=idle;then-indicator=#00d75f");
+    QCOMPARE(update.fallback.status, QStringLiteral("idle"));
+    QCOMPARE(name(update.fallback.indicator), QStringLiteral("#00d75f"));
+    QVERIFY(!update.fallback.detail.has_value());
+
+    // A misspelled then- key does not turn "clear" into "do nothing".
+    update = parse("status=working;expires-on=progress-end;then-staus=idle");
+    QCOMPARE(update.fallback, TabStatusFields::cleared());
+}
+
+void Vt102EmulationTest::testTabStatusSequence()
+{
+    TestEmulation em;
+    em.reset();
+    em.setCodec(TestEmulation::Utf8Codec);
+
+    QList<TabStatusUpdate> updates;
+    connect(&em, &Emulation::tabStatusReceived, this, [&updates](const TabStatusUpdate &update) {
+        updates.append(update);
+    });
+
+    const char bel[] = "\033]21337;status=Working;indicator=#ffa500\007";
+    em.receiveData(bel, sizeof(bel) - 1);
+    const char st[] = "\033]21337;status=;indicator=\033\\";
+    em.receiveData(st, sizeof(st) - 1);
+
+    QCOMPARE(updates.size(), 2);
+    QCOMPARE(updates.at(0), TabStatusUpdate::fromOsc21337(u"status=Working;indicator=#ffa500"));
+    QCOMPARE(updates.at(1), TabStatusUpdate::fromOsc21337(u"status=;indicator="));
+}
+
 QTEST_GUILESS_MAIN(Vt102EmulationTest)
 
 #include "moc_Vt102EmulationTest.cpp"

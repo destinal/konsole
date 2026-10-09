@@ -202,6 +202,7 @@ private:
         Image = 1337,
         // https://conemu.github.io/en/AnsiEscapeCodes.html#ConEmu_specific_OSC
         ConEmu = 9,
+        TabStatus = 21337,
     };
 
     ParserStates _state = Ground;

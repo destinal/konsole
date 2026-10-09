@@ -77,6 +77,23 @@ void SessionTest::testUserVars()
     delete session;
 }
 
+void SessionTest::testTabStatus()
+{
+    auto session = new Session();
+    QSignalSpy received(session, &Session::tabStatusReceived);
+
+    const char sequence[] = "\033]21337;status=Working;expires-on=progress-end;then-status=idle\007";
+    session->emulation()->receiveData(sequence, sizeof(sequence) - 1);
+
+    QCOMPARE(received.count(), 1);
+    const auto update = received.at(0).at(0).value<TabStatusUpdate>();
+    QCOMPARE(update.fields.status, QStringLiteral("Working"));
+    QVERIFY(update.expiresOnProgressEnd);
+    QCOMPARE(update.fallback.status, QStringLiteral("idle"));
+
+    delete session;
+}
+
 QTEST_MAIN(SessionTest)
 
 #include "moc_SessionTest.cpp"

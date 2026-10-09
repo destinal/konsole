@@ -27,6 +27,7 @@
 
 // Konsole
 #include "Shortcut_p.h"
+#include "TabStatus.h"
 #include "config-konsole.h"
 #include "containers/ContainerInfo.h"
 #include "konsoleprivate_export.h"
@@ -876,6 +877,12 @@ Q_SIGNALS:
 
     /** Emitted when a user-defined variable is set to a new value. */
     void userVarChanged(const QString &name, const QString &value);
+
+    /**
+     * Emitted when a program sets the session's status with OSC 21337.
+     * Konsole does not display it; this is for plugins that do.
+     */
+    void tabStatusReceived(const Konsole::TabStatusUpdate &update);
 
     /** Emitted when the session gets locked / unlocked. */
     void readOnlyChanged();
