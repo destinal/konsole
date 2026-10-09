@@ -850,6 +850,13 @@ public Q_SLOTS:
     Q_SCRIPTABLE void setTabColor(const QString &colorName);
 
     /**
+     * A colored dot shown as the session's tab icon, for plugins that track
+     * what the session's program is doing. An invalid color removes it.
+     */
+    QColor statusIndicator() const;
+    void setStatusIndicator(const QColor &color);
+
+    /**
      * Sets/gets a user-defined variable, as set by programs with the
      * escape sequence OSC 1337 ; SetUserVar=<name>=<base64 value>.
      * Names are limited to letters, digits and -_+. ; a session holds at
@@ -1087,6 +1094,7 @@ private:
     bool _tabActivityColorSetByUser = false;
 
     QHash<QString, QString> _userVars;
+    QColor _statusIndicator;
 
     // Badge properties
     bool _badgeEnabled = false;

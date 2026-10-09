@@ -15,6 +15,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenu>
+#include <QPainter>
 #include <QTabBar>
 
 // KDE
@@ -738,6 +739,31 @@ QColor TabbedViewContainer::effectiveTabActivityColor(ViewSplitter *splitter) co
     return mixed ? QColor() : chosen;
 }
 
+// A dot of the given color, for the tab of a session that shows a status.
+static QIcon statusDotIcon(const QColor &color)
+{
+    static QHash<QRgb, QIcon> cache;
+    const auto cached = cache.constFind(color.rgba());
+    if (cached != cache.cend()) {
+        return *cached;
+    }
+    QIcon icon;
+    for (const int size : {16, 22, 32, 48}) {
+        QPixmap pixmap(size, size);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const qreal diameter = size * 0.5;
+        painter.setPen(QPen(color.darker(140), size / 16.0));
+        painter.setBrush(color);
+        painter.drawEllipse(QRectF((size - diameter) / 2, (size - diameter) / 2, diameter, diameter));
+        painter.end();
+        icon.addPixmap(pixmap);
+    }
+    cache.insert(color.rgba(), icon);
+    return icon;
+}
+
 void TabbedViewContainer::updateIcon(ViewProperties *item)
 {
     auto controller = qobject_cast<SessionController *>(item);
@@ -754,7 +780,8 @@ void TabbedViewContainer::updateIcon(ViewProperties *item)
     //      focus changes or when the Session clears its notifications
     // 2. Copy input or read-only indicator when all views in the tab have
     //    the status
-    // 3. Active view icon
+    // 3. Status dot of the view
+    // 4. Active view icon
 
     QIcon icon = item->icon();
     if (state.notification != Session::NoNotification) {
@@ -779,9 +806,12 @@ void TabbedViewContainer::updateIcon(ViewProperties *item)
         icon = QIcon::fromTheme(QLatin1String("irc-voice"));
     } else if (state.readOnly) {
         icon = QIcon::fromTheme(QLatin1String("object-locked"));
+    } else if (item->statusIndicator().isValid()) {
+        icon = statusDotIcon(item->statusIndicator());
     }
 
-    if (tabIcon(index).name() != icon.name()) {
+    // A drawn icon has no name, so compare those by cache key.
+    if (tabIcon(index).name() != icon.name() || (icon.name().isEmpty() && tabIcon(index).cacheKey() != icon.cacheKey())) {
         setTabIcon(index, icon);
     }
 }

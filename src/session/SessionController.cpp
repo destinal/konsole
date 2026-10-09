@@ -2043,6 +2043,8 @@ bool SessionController::isCopyInputActive() const
 
 void SessionController::sessionAttributeChanged()
 {
+    setStatusIndicator(session()->statusIndicator());
+
     if (_sessionIconName != session()->iconName()) {
         qCDebug(KonsoleDebug) << "sessionAttributeChanged: TP 1.1";
         updateSessionIcon();

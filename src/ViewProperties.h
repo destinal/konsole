@@ -41,6 +41,8 @@ public:
 
     /** Returns the icon associated with a view */
     QIcon icon() const;
+    /** Returns the color of the status dot shown for the view, or an invalid color for none. */
+    QColor statusIndicator() const;
     /** Returns the title associated with a view */
     QString title() const;
     /** Returns the color associated with a view */
@@ -124,6 +126,8 @@ protected:
      * an iconChanged() signal to be emitted
      */
     void setIcon(const QIcon &icon);
+    /** Subclasses may call this to show a status dot; emits iconChanged(). */
+    void setStatusIndicator(const QColor &color);
     /**
      * Subclasses may call this method to change the color.  This causes
      * a colorChanged() signal to be emitted
@@ -145,6 +149,7 @@ private:
     QIcon _icon;
     QString _title;
     QColor _color;
+    QColor _statusIndicator;
     QColor _activityColor;
     int _identifier;
     std::optional<TerminalProgress> _progress;

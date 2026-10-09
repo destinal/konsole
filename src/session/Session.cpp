@@ -2431,6 +2431,20 @@ QString Session::tabColor() const
     return _tabColor.name();
 }
 
+QColor Session::statusIndicator() const
+{
+    return _statusIndicator;
+}
+
+void Session::setStatusIndicator(const QColor &color)
+{
+    if (_statusIndicator == color) {
+        return;
+    }
+    _statusIndicator = color;
+    Q_EMIT sessionAttributeChanged();
+}
+
 QString Session::userVar(const QString &name) const
 {
     return _userVars.value(name);

@@ -56,6 +56,19 @@ void ViewProperties::setTitle(const QString &title)
     }
 }
 
+QColor ViewProperties::statusIndicator() const
+{
+    return _statusIndicator;
+}
+
+void ViewProperties::setStatusIndicator(const QColor &color)
+{
+    if (_statusIndicator != color) {
+        _statusIndicator = color;
+        Q_EMIT iconChanged(this);
+    }
+}
+
 void ViewProperties::setIcon(const QIcon &icon)
 {
     // the icon's cache key is used to determine whether this icon is the same
