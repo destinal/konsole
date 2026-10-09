@@ -16,10 +16,12 @@
 
 // Konsole
 #include "Enumeration.h"
+#include "TerminalProgress.h"
 #include "konsoleprivate_export.h"
 #include "terminalDisplay/TerminalDisplay.h"
 
 #include <memory>
+#include <optional>
 
 class QKeyEvent;
 
@@ -452,17 +454,11 @@ Q_SIGNALS:
 
     /**
      * Emitted after receiving the escape sequence which asks to
-     * display progress.
+     * display or hide progress.
      *
-     * @param progress The progress in percent (0-100)
+     * @param progress The progress to display, or std::nullopt to hide it
      */
-    void progressChanged(int progress);
-
-    /**
-     * Emitted after receiving the escape sequence which asks to
-     * hide progress.
-     */
-    void progressHidden();
+    void progressChanged(const std::optional<Konsole::TerminalProgress> &progress);
 
 protected:
     virtual void setMode(int mode) = 0;

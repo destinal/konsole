@@ -232,11 +232,8 @@ SessionController::SessionController(Session *sessionParam, TerminalDisplay *vie
     // xterm '11;?' request
     connect(session(), &Konsole::Session::getBackgroundColor, this, &Konsole::SessionController::sendBackgroundColor);
 
-    connect(session()->emulation(), &Konsole::Emulation::progressChanged, this, [this](int progress) {
+    connect(session()->emulation(), &Konsole::Emulation::progressChanged, this, [this](const std::optional<TerminalProgress> &progress) {
         setProgress(progress);
-    });
-    connect(session()->emulation(), &Konsole::Emulation::progressHidden, this, [this] {
-        setProgress(std::nullopt);
     });
 
     _allControllers.insert(this);

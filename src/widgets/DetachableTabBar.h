@@ -12,8 +12,11 @@
 
 #include <optional>
 
+#include "TerminalProgress.h"
+
 class QColor;
 class QPaintEvent;
+class QTimer;
 
 namespace Konsole
 {
@@ -21,7 +24,7 @@ class TabbedViewContainer;
 
 struct DetachableTabData {
     QColor color;
-    std::optional<int> progress;
+    std::optional<TerminalProgress> progress;
 };
 
 class DetachableTabBar : public QTabBar
@@ -40,7 +43,7 @@ public:
     void removeColor(int idx);
     void setActivityColor(int idx, const QColor &color);
 
-    void setProgress(int idx, const std::optional<int> &progress);
+    void setProgress(int idx, const std::optional<TerminalProgress> &progress);
 
 Q_SIGNALS:
     void detachTab(int index);
@@ -59,12 +62,16 @@ protected:
 
 private:
     void setDetachableTabData(int idx, const DetachableTabData &data);
+    bool hasIndeterminateProgress() const;
 
     DragType dragType;
     QCursor _originalCursor;
     QList<TabbedViewContainer *> _containers;
     int tabId;
     QColor _activityColor;
+    // Drives the animation of indeterminate progress bars.
+    QTimer *_indeterminateTimer;
+    int _indeterminatePhase = 0;
 };
 }
 

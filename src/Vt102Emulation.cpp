@@ -1866,27 +1866,36 @@ void Vt102Emulation::processSessionAttributeRequest(const int tokenSize, const u
                 bool ok;
                 const int st = list.at(1).toInt(&ok);
                 if (ok) {
+                    std::optional<int> percent;
+                    if (list.size() >= 3) {
+                        const int pr = list.at(2).toInt(&ok);
+                        if (ok && pr >= 0 && pr <= 100) {
+                            percent = pr;
+                        }
+                    }
                     switch (st) {
                     case 0:
-                        Q_EMIT progressHidden();
+                        _progressPercent = 0;
+                        Q_EMIT progressChanged(std::nullopt);
                         break;
                     case 1:
-                        if (list.size() >= 3) {
-                            const int pr = list.at(2).toInt(&ok);
-                            if (ok && pr >= 0 && pr <= 100) {
-                                Q_EMIT progressChanged(pr);
-                            }
+                        if (percent.has_value()) {
+                            _progressPercent = percent.value();
+                            Q_EMIT progressChanged(TerminalProgress{TerminalProgress::Normal, _progressPercent});
                         }
                         break;
                     case 2:
-                        // TODO error state.
+                        // The percentage is optional for the error and paused
+                        // states; without one, the last reported value stays.
+                        _progressPercent = percent.value_or(_progressPercent);
+                        Q_EMIT progressChanged(TerminalProgress{TerminalProgress::Error, _progressPercent});
                         break;
                     case 3:
-                        // TODO indeterminate state.
-                        Q_EMIT progressHidden();
+                        Q_EMIT progressChanged(TerminalProgress{TerminalProgress::Indeterminate, 0});
                         break;
                     case 4:
-                        // TODO paused state.
+                        _progressPercent = percent.value_or(_progressPercent);
+                        Q_EMIT progressChanged(TerminalProgress{TerminalProgress::Paused, _progressPercent});
                         break;
                     }
                 }

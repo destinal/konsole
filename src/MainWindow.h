@@ -20,6 +20,7 @@
 #include <KXmlGuiWindow>
 
 // Konsole
+#include "TerminalProgress.h"
 #include "konsoleapp_export.h"
 
 #include <optional>
@@ -244,7 +245,7 @@ private:
     QPointer<SessionController> _pluggedController;
     std::vector<IKonsolePlugin *> _plugins;
     QList<QAction *> _pluginsActions;
-    std::optional<int> _progress;
+    std::optional<TerminalProgress> _progress;
     bool _blurEnabled = false;
     bool _firstShowEvent = true;
 

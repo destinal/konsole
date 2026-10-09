@@ -94,7 +94,7 @@ void ViewProperties::setIdentifier(int id)
     _viewProperties.insert(id, this);
 }
 
-void ViewProperties::setProgress(const std::optional<int> &progress)
+void ViewProperties::setProgress(const std::optional<TerminalProgress> &progress)
 {
     if (_progress != progress) {
         _progress = progress;
@@ -122,7 +122,7 @@ QColor ViewProperties::color() const
     return _color;
 }
 
-std::optional<int> ViewProperties::progress() const
+std::optional<Konsole::TerminalProgress> ViewProperties::progress() const
 {
     return _progress;
 }

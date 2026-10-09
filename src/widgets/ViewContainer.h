@@ -12,6 +12,7 @@
 #include <QTabWidget>
 
 // Konsole
+#include "TerminalProgress.h"
 #include "ViewManager.h"
 #include "containers/ContainerInfo.h"
 #include "session/Session.h"
@@ -217,7 +218,7 @@ Q_SIGNALS:
     void removeColor(int idx);
 
     /** set the tab progress */
-    void setProgress(int idx, const std::optional<int> &progress);
+    void setProgress(int idx, const std::optional<TerminalProgress> &progress);
 
     /** set the activity color tab */
     void setActivityColor(int index, const QColor &color);

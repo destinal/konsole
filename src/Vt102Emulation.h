@@ -328,6 +328,10 @@ private:
     qint64 _kittyNotificationSerial = 0;
     QMap<QString, KittyNotificationState> _kittyNotifications;
 
+    // Last percentage reported with OSC 9;4, kept for the error and paused
+    // states, which may omit it.
+    int _progressPercent = 0;
+
     TerminalState _currentModes;
     TerminalState _savedModes;
 

@@ -13,9 +13,11 @@
 #include <QMouseEvent>
 
 #include <KAcceleratorManager>
+#include <KColorScheme>
 
 #include <QColor>
 #include <QPainter>
+#include <QTimer>
 
 namespace Konsole
 {
@@ -25,10 +27,21 @@ DetachableTabBar::DetachableTabBar(QWidget *parent)
     , _originalCursor(cursor())
     , tabId(-1)
     , _activityColor(QColor::Invalid)
+    , _indeterminateTimer(new QTimer(this))
 {
     setAcceptDrops(true);
     setElideMode(Qt::TextElideMode::ElideLeft);
     KAcceleratorManager::setNoAccel(this);
+
+    _indeterminateTimer->setInterval(50);
+    connect(_indeterminateTimer, &QTimer::timeout, this, [this] {
+        if (!hasIndeterminateProgress()) {
+            _indeterminateTimer->stop();
+            return;
+        }
+        _indeterminatePhase = (_indeterminatePhase + 2) % 100;
+        update();
+    });
 }
 
 void DetachableTabBar::setColor(int idx, const QColor &color)
@@ -58,7 +71,7 @@ void DetachableTabBar::removeColor(int idx)
     }
 }
 
-void DetachableTabBar::setProgress(int idx, const std::optional<int> &progress)
+void DetachableTabBar::setProgress(int idx, const std::optional<TerminalProgress> &progress)
 {
     DetachableTabData data = tabData(idx).value<DetachableTabData>();
     if (data.progress != progress) {
@@ -66,6 +79,21 @@ void DetachableTabBar::setProgress(int idx, const std::optional<int> &progress)
         setDetachableTabData(idx, data);
         update(tabRect(idx));
     }
+
+    if (progress.has_value() && progress->state == TerminalProgress::Indeterminate && !_indeterminateTimer->isActive()) {
+        _indeterminateTimer->start();
+    }
+}
+
+bool DetachableTabBar::hasIndeterminateProgress() const
+{
+    for (int tabIndex = 0; tabIndex < count(); tabIndex++) {
+        const auto progress = tabData(tabIndex).value<DetachableTabData>().progress;
+        if (progress.has_value() && progress->state == TerminalProgress::Indeterminate) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void DetachableTabBar::setDetachableTabData(int idx, const DetachableTabData &data)
@@ -206,7 +234,11 @@ void DetachableTabBar::paintEvent(QPaintEvent *event)
             continue;
         }
 
-        const QColor color = colorValid ? tabData.color : palette().highlight().color();
+        QColor color = colorValid ? tabData.color : palette().highlight().color();
+        if (tabData.progress.has_value() && tabData.progress->state != TerminalProgress::Normal && tabData.progress->state != TerminalProgress::Indeterminate) {
+            const KColorScheme colorScheme(palette().currentColorGroup());
+            color = colorScheme.foreground(tabData.progress->state == TerminalProgress::Error ? KColorScheme::NegativeText : KColorScheme::NeutralText).color();
+        }
 
         painter.setBrush(color);
         QRect tRect = tabRect(tabIndex);
@@ -221,8 +253,18 @@ void DetachableTabBar::paintEvent(QPaintEvent *event)
             painter.drawRect(tRect);
             painter.setOpacity(1.0);
 
-            tRect.setWidth(tRect.width() * tabData.progress.value() / 100.0);
-            painter.drawRect(tRect);
+            if (tabData.progress->state == TerminalProgress::Indeterminate) {
+                // A quarter-width segment that slides across the bar and wraps.
+                const int segmentWidth = tRect.width() / 4;
+                const int x = tRect.left() + (tRect.width() + segmentWidth) * _indeterminatePhase / 100 - segmentWidth;
+                painter.save();
+                painter.setClipRect(tRect);
+                painter.drawRect(QRect(x, tRect.top(), segmentWidth, tRect.height()));
+                painter.restore();
+            } else {
+                tRect.setWidth(tRect.width() * tabData.progress->percent / 100.0);
+                painter.drawRect(tRect);
+            }
         } else {
             painter.drawRect(tRect);
         }

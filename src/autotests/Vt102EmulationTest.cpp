@@ -765,6 +765,40 @@ void Vt102EmulationTest::testKittyKeyboardTextKeys()
     }
 }
 
+void Vt102EmulationTest::testProgressStates()
+{
+    TestEmulation em;
+    em.reset();
+    em.setCodec(TestEmulation::Utf8Codec);
+
+    std::vector<std::optional<TerminalProgress>> reports;
+    connect(&em, &Emulation::progressChanged, this, [&reports](const std::optional<TerminalProgress> &progress) {
+        reports.push_back(progress);
+    });
+    auto send = [&em](const char *sequence) {
+        em.receiveData(sequence, strlen(sequence));
+    };
+
+    send("\033]9;4;3\007");
+    send("\033]9;4;1;40\007");
+    // Error and paused keep the last percentage when they omit one.
+    send("\033]9;4;2\007");
+    send("\033]9;4;4;70\007");
+    send("\033]9;4;0\007");
+    // Normal progress needs a percentage in range; these are ignored.
+    send("\033]9;4;1\007");
+    send("\033]9;4;1;150\007");
+
+    const std::vector<std::optional<TerminalProgress>> expected = {
+        TerminalProgress{TerminalProgress::Indeterminate, 0},
+        TerminalProgress{TerminalProgress::Normal, 40},
+        TerminalProgress{TerminalProgress::Error, 40},
+        TerminalProgress{TerminalProgress::Paused, 70},
+        std::nullopt,
+    };
+    QCOMPARE(reports, expected);
+}
+
 QTEST_GUILESS_MAIN(Vt102EmulationTest)
 
 #include "moc_Vt102EmulationTest.cpp"

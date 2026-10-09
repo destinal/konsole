@@ -18,6 +18,7 @@
 #include <optional>
 
 // Konsole
+#include "TerminalProgress.h"
 #include "konsoleprivate_export.h"
 #include "session/Session.h"
 
@@ -45,7 +46,7 @@ public:
     /** Returns the color associated with a view */
     QColor color() const;
     /** Returns the progress associated with a view */
-    std::optional<int> progress() const;
+    std::optional<TerminalProgress> progress() const;
     /** Returns the activity color associated with a view */
     QColor activityColor() const;
 
@@ -136,7 +137,7 @@ protected:
     /** Subclasses may call this method to change the identifier. */
     void setIdentifier(int id);
     /** Subclass may call this method to change the progress. */
-    void setProgress(const std::optional<int> &progress);
+    void setProgress(const std::optional<TerminalProgress> &progress);
 
 private:
     Q_DISABLE_COPY(ViewProperties)
@@ -146,7 +147,7 @@ private:
     QColor _color;
     QColor _activityColor;
     int _identifier;
-    std::optional<int> _progress;
+    std::optional<TerminalProgress> _progress;
     static QHash<int, ViewProperties *> _viewProperties;
 };
 }

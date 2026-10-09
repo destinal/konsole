@@ -391,7 +391,7 @@ void MainWindow::updateWindowIcon()
 void MainWindow::updateProgress()
 {
 #if HAVE_DBUS
-    std::optional<int> progress;
+    std::optional<TerminalProgress> progress;
     if (KonsoleSettings::showProgressInTaskBar() && _pluggedController) {
         progress = _pluggedController->progress();
     }
@@ -410,8 +410,9 @@ void MainWindow::updateProgress()
     }
 
     QVariantMap properties;
-    if (progress.has_value()) {
-        properties.insert(QStringLiteral("progress"), progress.value() / 100.0);
+    // The launcher entry API has no indeterminate state.
+    if (progress.has_value() && progress->state != TerminalProgress::Indeterminate) {
+        properties.insert(QStringLiteral("progress"), progress->percent / 100.0);
         properties.insert(QStringLiteral("progress-visible"), true);
     } else {
         properties.insert(QStringLiteral("progress-visible"), false);
