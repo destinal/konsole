@@ -1,0 +1,56 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Eric Duprey <509630+destinal@users.noreply.github.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The Code Review member of a Claude Code workgroup in Konsole.
+#
+# Starts nothing until asked: Enter starts a Claude Code review of the
+# pending changes with the review prompt, e edits the prompt first. The
+# prompt is kept in $XDG_CONFIG_HOME/konsole-claudecode/review-prompt.txt.
+# When code-review-system-prompt.txt and code-review-settings.json sit next to
+# this script, the review gets them too.
+
+here=$(dirname "$(readlink -f "$0")")
+prompt=${XDG_CONFIG_HOME:-$HOME/.config}/konsole-claudecode/review-prompt.txt
+if [ ! -f "$prompt" ]; then
+    mkdir -p "$(dirname "$prompt")"
+    cp "$here/review-prompt.txt" "$prompt"
+fi
+
+arguments=()
+[ -f "$here/code-review-system-prompt.txt" ] && arguments+=(--append-system-prompt-file "$here/code-review-system-prompt.txt")
+[ -f "$here/code-review-settings.json" ] && arguments+=(--settings "$here/code-review-settings.json")
+
+while :; do
+    width=$(tput cols)
+    clear
+    printf 'Code Review\n\nReview prompt (%s):\n\n' "$prompt"
+    sed 's/^/    /' "$prompt" | fold -s -w "$((width - 4))"
+    printf '\nEnter: start the review    e: edit the prompt\n'
+    # Wait for a key, redrawing if the view is resized meanwhile (it starts
+    # out narrow, before the workgroup shows it).
+    while :; do
+        read -r -s -n 1 -t 0.5 key
+        status=$?
+        if [ $status -le 128 ]; then
+            break
+        fi
+        [ "$(tput cols)" != "$width" ] && break
+    done
+    if [ $status -gt 128 ]; then
+        continue
+    elif [ $status -ne 0 ]; then
+        exit 0
+    fi
+    case "$key" in
+    e | E)
+        ${VISUAL:-${EDITOR:-vim}} "$prompt"
+        ;;
+    "")
+        clear
+        claude "$(cat "$prompt")" "${arguments[@]}"
+        printf '\nReview finished. Press Enter to continue.\n'
+        read -r _ || exit 0
+        ;;
+    esac
+done

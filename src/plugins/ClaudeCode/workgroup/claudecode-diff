@@ -1,0 +1,43 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Eric Duprey <509630+destinal@users.noreply.github.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The Diff member of a Claude Code workgroup in Konsole.
+#
+#   claudecode-diff [BASE]
+#
+# Waits for Enter, which the Claude Code plugin types the first time the
+# member is shown, then runs the diff against BASE (default HEAD) once git
+# reports staged or unstaged changes. Enter runs it again later. The command
+# is $CLAUDECODE_DIFF_COMMAND (default: git difftool -y -x vimdiff), with BASE
+# appended.
+
+base=${1:-HEAD}
+command=${CLAUDECODE_DIFF_COMMAND:-git difftool -y -x vimdiff}
+
+has_changes() {
+    # Staged or tracked unstaged changes; untracked files do not count.
+    ! git diff --quiet "$base" -- 2>/dev/null
+}
+
+clear
+printf 'Diff against %s\n\nThis session shows the working tree'"'"'s changes when you switch to it.\n' "$base"
+while read -r _; do
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        printf '\n%s is not in a git repository. Press Enter to check again.\n' "$PWD"
+        continue
+    fi
+    while ! has_changes; do
+        clear
+        printf 'Diff session is waiting for changes.\n\n'
+        printf 'This session only starts its command when git reports staged or unstaged\n'
+        printf 'changes against %s, and the working tree is clean. Edit a file (or stage\n' "$base"
+        printf 'one) and the command will start on its own. Press Enter to run it now anyway.\n'
+        if read -r -t 2 _; then
+            break
+        fi
+    done
+    clear
+    bash -c "$command \"\$1\"" claudecode-diff "$base"
+    printf '\nDiff finished. Press Enter to run it again.\n'
+done

@@ -13,6 +13,7 @@
 namespace Konsole
 {
 class Session;
+struct ProgramStatusReport;
 }
 class SessionStatus;
 class ProgramStatusController;
@@ -46,6 +47,9 @@ public:
 Q_SIGNALS:
     /** Something visible about @p session's status changed. */
     void statusChanged(Konsole::Session *session, const std::optional<QString> &previousStatusText);
+
+    /** @p session's program sent a Program Status Protocol report (OSC 7501). */
+    void programStatusReported(Konsole::Session *session, const Konsole::ProgramStatusReport &report);
 
 private:
     void track(Konsole::Session *session);

@@ -11,8 +11,10 @@
 #include "sessionstatusregistry.h"
 #include "statusbadges.h"
 #include "statusnotifier.h"
+#include "workgroupmanager.h"
 
 #include "MainWindow.h"
+#include "ViewManager.h"
 #include "session/Session.h"
 #include "session/SessionController.h"
 #include "terminalDisplay/TerminalDisplay.h"
@@ -29,6 +31,7 @@ struct ClaudeCodePlugin::Private {
     SessionStatusRegistry *registry = nullptr;
     ClaudeSessionsModel *model = nullptr;
     StatusBadges *badges = nullptr;
+    WorkgroupManager *workgroups = nullptr;
     QMap<Konsole::MainWindow *, QDockWidget *> dockForWindow;
 };
 
@@ -42,6 +45,7 @@ ClaudeCodePlugin::ClaudeCodePlugin(QObject *object, const QVariantList &args)
     priv->model = new ClaudeSessionsModel(priv->registry, this);
     new StatusNotifier(priv->registry, this);
     priv->badges = new StatusBadges(priv->registry, this);
+    priv->workgroups = new WorkgroupManager(priv->registry, this);
 
     // The session's tab shows its status as a colored dot.
     connect(priv->registry, &SessionStatusRegistry::statusChanged, this, [this](Konsole::Session *session) {
@@ -121,7 +125,46 @@ QList<QAction *> ClaudeCodePlugin::menuBarActions(Konsole::MainWindow *mainWindo
     // One setting for every window: keep each window's menu in step.
     connect(priv->badges, &StatusBadges::enabledChanged, badgesAction, &QAction::setChecked);
 
-    return {toggleVisibilityAction, badgesAction};
+    // Workgroups act on the window's active session.
+    auto activeSession = [mainWindow]() -> Konsole::Session * {
+        Konsole::SessionController *controller = mainWindow->viewManager()->activeViewController();
+        return controller != nullptr ? controller->session().data() : nullptr;
+    };
+
+    auto *enterAction = new QAction(i18n("Enter Claude Workgroup"), mainWindow);
+    mainWindow->actionCollection()->addAction(QStringLiteral("claudecode-enter-workgroup"), enterAction);
+    connect(enterAction, &QAction::triggered, priv->workgroups, [this, activeSession] {
+        priv->workgroups->enter(activeSession());
+    });
+
+    auto *exitAction = new QAction(i18n("Exit Claude Workgroup"), mainWindow);
+    mainWindow->actionCollection()->addAction(QStringLiteral("claudecode-exit-workgroup"), exitAction);
+    connect(exitAction, &QAction::triggered, priv->workgroups, [this, activeSession] {
+        priv->workgroups->exit(activeSession());
+    });
+
+    QList<QAction *> memberActions;
+    const QStringList names = Workgroup::memberNames();
+    for (int member = 0; member < Workgroup::memberCount; member++) {
+        auto *action = new QAction(i18nc("@action show a workgroup member", "Show %1", names.at(member)), mainWindow);
+        mainWindow->actionCollection()->addAction(QStringLiteral("claudecode-workgroup-member-%1").arg(member), action);
+        mainWindow->actionCollection()->setDefaultShortcut(action, QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key(Qt::Key_1 + member)));
+        connect(action, &QAction::triggered, priv->workgroups, [this, activeSession, member] {
+            if (Workgroup *workgroup = priv->workgroups->workgroup(activeSession())) {
+                workgroup->show(Workgroup::Member(member));
+            }
+        });
+        memberActions.append(action);
+    }
+
+    auto *autoEnterAction = new QAction(i18n("Enter Claude Workgroups Automatically"), mainWindow);
+    autoEnterAction->setCheckable(true);
+    autoEnterAction->setChecked(priv->workgroups->autoEnter());
+    mainWindow->actionCollection()->addAction(QStringLiteral("claudecode-auto-enter-workgroup"), autoEnterAction);
+    connect(autoEnterAction, &QAction::toggled, priv->workgroups, &WorkgroupManager::setAutoEnter);
+    connect(priv->workgroups, &WorkgroupManager::autoEnterChanged, autoEnterAction, &QAction::setChecked);
+
+    return QList<QAction *>{toggleVisibilityAction, badgesAction, enterAction, exitAction} + memberActions + QList<QAction *>{autoEnterAction};
 }
 
 #include "claudecodeplugin.moc"

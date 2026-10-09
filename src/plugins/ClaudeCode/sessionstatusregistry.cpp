@@ -63,6 +63,9 @@ void SessionStatusRegistry::track(Konsole::Session *session)
     Konsole::Emulation *emulation = session->emulation();
     connect(emulation, &Konsole::Emulation::progressChanged, status, &SessionStatus::progressReported);
     connect(emulation, &Konsole::Emulation::programStatusReported, programStatus, &ProgramStatusController::handle);
+    connect(emulation, &Konsole::Emulation::programStatusReported, this, [this, session](const Konsole::ProgramStatusReport &report) {
+        Q_EMIT programStatusReported(session, report);
+    });
     connect(emulation, &Konsole::Emulation::promptStarted, programStatus, &ProgramStatusController::promptStarted);
     connect(emulation, &Konsole::Emulation::terminalReset, programStatus, &ProgramStatusController::terminalReset);
     connect(session, &Konsole::Session::tabStatusReceived, status, [status](const Konsole::TabStatusUpdate &update) {
