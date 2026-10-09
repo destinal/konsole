@@ -61,17 +61,15 @@ void StatusNotifier::statusChanged(Konsole::Session *session, const std::optiona
     if (sent != _sent.cend() && sent->event == event && sent->timer.elapsed() < repeatIntervalMs) {
         return;
     }
+    if (!_sent.contains(session)) {
+        // Once per session: a lambda cannot be a unique connection.
+        connect(session, &QObject::destroyed, this, [this, session] {
+            _sent.remove(session);
+        });
+    }
     Sent record{event, QElapsedTimer()};
     record.timer.start();
     _sent.insert(session, record);
-    connect(
-        session,
-        &QObject::destroyed,
-        this,
-        [this, session] {
-            _sent.remove(session);
-        },
-        Qt::UniqueConnection);
 
     auto *notification = new KNotification(event, KNotification::CloseWhenWindowActivated);
     notification->setTitle(i18nc("@title a Claude Code session, named by its tab title", "Claude Code — %1", ClaudeCode::sessionTitle(session)));

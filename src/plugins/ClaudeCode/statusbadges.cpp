@@ -67,14 +67,14 @@ void StatusBadges::update(Konsole::Session *session)
 
     if (!shown) {
         _saved.insert(session, badgeOf(session));
-        connect(
-            session,
-            &QObject::destroyed,
-            this,
-            [this, session] {
+        // Once per session: a lambda cannot be a unique connection.
+        if (!_watched.contains(session)) {
+            _watched.insert(session);
+            connect(session, &QObject::destroyed, this, [this, session] {
                 _saved.remove(session);
-            },
-            Qt::UniqueConnection);
+                _watched.remove(session);
+            });
+        }
     }
     Badge badge;
     badge.enabled = true;

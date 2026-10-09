@@ -7,6 +7,7 @@
 #include <QColor>
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 namespace Konsole
@@ -51,6 +52,7 @@ private:
     bool _enabled;
     // The badge each session had before a status badge replaced it.
     QHash<Konsole::Session *, Badge> _saved;
+    QSet<Konsole::Session *> _watched;
 };
 
 #endif // STATUSBADGES_H
