@@ -5,13 +5,12 @@
 #include "claudecodedbus.h"
 #include "claudesessionswidget.h"
 #include "konsoledebug.h"
+#include "programstatusrecords.h"
 #include "sessionstatus.h"
 #include "sessionstatusregistry.h"
 
 #include "MainWindow.h"
-#include "session/Session.h"
 #include "session/SessionController.h"
-#include "session/SessionManager.h"
 #include "terminalDisplay/TerminalDisplay.h"
 
 #include <KActionCollection>
@@ -33,15 +32,6 @@ ClaudeCodePlugin::ClaudeCodePlugin(QObject *object, const QVariantList &args)
     setName(QStringLiteral("ClaudeCode"));
 
     priv->registry = new SessionStatusRegistry(this);
-
-    // Claude Code reports a turn's start and end with OSC 9;4 progress only to
-    // terminals it recognizes, ConEmu among them; without the end of a turn,
-    // an interrupt (which runs no hook) leaves the status on "working". Until
-    // Konsole speaks Claude Code's own status protocol (OSC 7501), pass as
-    // ConEmu. This must happen before the session's program starts.
-    connect(Konsole::SessionManager::instance(), &Konsole::SessionManager::sessionCreated, this, [](Konsole::Session *session) {
-        session->addEnvironmentEntry(QStringLiteral("ConEmuANSI=ON"));
-    });
     auto *dbus = new ClaudeCodeDBus(priv->registry, this);
     if (!dbus->registerObject()) {
         qCWarning(KonsoleDebug) << "Claude Code plugin could not register /ClaudeCode on D-Bus";
@@ -78,6 +68,11 @@ void ClaudeCodePlugin::activeViewChanged(Konsole::SessionController *controller,
     SessionStatus *status = priv->registry->status(controller->session());
     if (status != nullptr) {
         connect(controller->view(), &Konsole::TerminalDisplay::keyPressedSignal, status, &SessionStatus::userDidPressKey, Qt::UniqueConnection);
+        connect(controller->view(),
+                &Konsole::TerminalDisplay::keyPressedSignal,
+                priv->registry->programStatus(controller->session()),
+                &ProgramStatusController::userDidPressKey,
+                Qt::UniqueConnection);
     }
 }
 

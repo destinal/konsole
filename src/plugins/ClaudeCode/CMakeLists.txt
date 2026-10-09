@@ -3,6 +3,7 @@ SOURCES
     claudecodeplugin.cpp
     claudecodedbus.cpp
     claudesessionswidget.cpp
+    programstatusrecords.cpp
     sessionstatus.cpp
     sessionstatusregistry.cpp
 INSTALL_NAMESPACE

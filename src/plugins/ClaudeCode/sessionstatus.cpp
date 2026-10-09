@@ -257,6 +257,9 @@ bool SessionStatus::apply(const StatusUpdate &update)
     if (applyToState(update)) {
         Q_EMIT changed(previousText);
     }
+    if (asserts) {
+        Q_EMIT asserted();
+    }
 
     // A count arriving after the head start may report that the last of the
     // background work holding an expiration has finished. Only a count can

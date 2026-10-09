@@ -121,6 +121,13 @@ Q_SIGNALS:
     /** Something visible changed. */
     void changed(const std::optional<QString> &previousStatusText);
 
+    /**
+     * An update that says something about what the session is doing was
+     * applied, as opposed to one that only parked bookkeeping. Emitted
+     * whether or not anything visible changed.
+     */
+    void asserted();
+
 private:
     struct Display {
         QColor indicator;

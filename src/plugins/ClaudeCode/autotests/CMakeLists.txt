@@ -8,3 +8,14 @@ ecm_add_test(
     LINK_LIBRARIES Qt::Test konsoleprivate
 )
 target_include_directories(ClaudeCodeSessionStatusTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+ecm_add_test(
+    ProgramStatusRecordsTest.cpp
+    ../programstatusrecords.cpp
+    ../programstatusrecords.h
+    ../sessionstatus.cpp
+    ../sessionstatus.h
+    TEST_NAME ClaudeCodeProgramStatusRecordsTest
+    LINK_LIBRARIES Qt::Test KF6::I18n konsoleprivate
+)
+target_include_directories(ClaudeCodeProgramStatusRecordsTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)

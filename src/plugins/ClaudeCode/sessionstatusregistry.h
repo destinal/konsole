@@ -12,6 +12,7 @@ namespace Konsole
 class Session;
 }
 class SessionStatus;
+class ProgramStatusController;
 
 /**
  * Keeps a SessionStatus for every Konsole session, from the moment it is
@@ -28,6 +29,9 @@ public:
     /** The status of @p session, or nullptr for a session that is not tracked. */
     SessionStatus *status(Konsole::Session *session) const;
 
+    /** The OSC 7501 records of @p session, or nullptr for a session that is not tracked. */
+    ProgramStatusController *programStatus(Konsole::Session *session) const;
+
     /**
      * The session named by @p identifier: its D-Bus path (/Sessions/3) or
      * its number (3). Returns nullptr when there is none.
@@ -43,7 +47,11 @@ Q_SIGNALS:
 private:
     void track(Konsole::Session *session);
 
-    QHash<Konsole::Session *, SessionStatus *> _statuses;
+    struct Tracked {
+        SessionStatus *status;
+        ProgramStatusController *programStatus;
+    };
+    QHash<Konsole::Session *, Tracked> _sessions;
 };
 
 #endif // SESSIONSTATUSREGISTRY_H

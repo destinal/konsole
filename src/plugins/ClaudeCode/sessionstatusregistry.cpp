@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "sessionstatusregistry.h"
+#include "programstatusrecords.h"
 #include "sessionstatus.h"
 
 #include "Emulation.h"
@@ -21,7 +22,12 @@ SessionStatusRegistry::SessionStatusRegistry(QObject *parent)
 
 SessionStatus *SessionStatusRegistry::status(Konsole::Session *session) const
 {
-    return _statuses.value(session);
+    return _sessions.value(session).status;
+}
+
+ProgramStatusController *SessionStatusRegistry::programStatus(Konsole::Session *session) const
+{
+    return _sessions.value(session).programStatus;
 }
 
 Konsole::Session *SessionStatusRegistry::session(const QString &identifier) const
@@ -32,7 +38,7 @@ Konsole::Session *SessionStatusRegistry::session(const QString &identifier) cons
     if (!ok) {
         return nullptr;
     }
-    for (auto it = _statuses.cbegin(); it != _statuses.cend(); ++it) {
+    for (auto it = _sessions.cbegin(); it != _sessions.cend(); ++it) {
         if (it.key()->sessionId() == id) {
             return it.key();
         }
@@ -42,27 +48,34 @@ Konsole::Session *SessionStatusRegistry::session(const QString &identifier) cons
 
 QList<Konsole::Session *> SessionStatusRegistry::sessions() const
 {
-    return _statuses.keys();
+    return _sessions.keys();
 }
 
 void SessionStatusRegistry::track(Konsole::Session *session)
 {
-    if (_statuses.contains(session)) {
+    if (_sessions.contains(session)) {
         return;
     }
     auto *status = new SessionStatus(this);
-    _statuses.insert(session, status);
+    auto *programStatus = new ProgramStatusController(status, status);
+    _sessions.insert(session, {status, programStatus});
 
-    connect(session->emulation(), &Konsole::Emulation::progressChanged, status, &SessionStatus::progressReported);
+    Konsole::Emulation *emulation = session->emulation();
+    connect(emulation, &Konsole::Emulation::progressChanged, status, &SessionStatus::progressReported);
+    connect(emulation, &Konsole::Emulation::programStatusReported, programStatus, &ProgramStatusController::handle);
+    connect(emulation, &Konsole::Emulation::promptStarted, programStatus, &ProgramStatusController::promptStarted);
+    connect(emulation, &Konsole::Emulation::terminalReset, programStatus, &ProgramStatusController::terminalReset);
     connect(session, &Konsole::Session::tabStatusReceived, status, [status](const Konsole::TabStatusUpdate &update) {
         status->apply(StatusUpdate::fromTabStatus(update));
     });
+    connect(session, &Konsole::Session::finished, programStatus, &ProgramStatusController::programExited);
     connect(session, &Konsole::Session::finished, status, &SessionStatus::programDidExit);
     connect(status, &SessionStatus::changed, this, [this, session] {
         Q_EMIT statusChanged(session);
     });
     connect(session, &QObject::destroyed, this, [this, session] {
-        delete _statuses.take(session);
+        // The status owns its program status controller.
+        delete _sessions.take(session).status;
     });
 }
 
