@@ -183,6 +183,7 @@ set(konsoleprivate_SRCS ${windowadaptors_SRCS}
                         ShouldApplyProperty.cpp
                         UnixProcessInfo.cpp
                         ViewManager.cpp
+                        ProgramStatus.cpp
                         TabStatus.cpp
                         ViewProperties.cpp
                         Vt102Emulation.cpp

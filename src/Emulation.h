@@ -16,6 +16,7 @@
 
 // Konsole
 #include "Enumeration.h"
+#include "ProgramStatus.h"
 #include "TabStatus.h"
 #include "TerminalProgress.h"
 #include "konsoleprivate_export.h"
@@ -461,6 +462,19 @@ Q_SIGNALS:
      * sets the status shown for the session. See TabStatusUpdate.
      */
     void tabStatusReceived(const Konsole::TabStatusUpdate &update);
+
+    /**
+     * Emitted after receiving a Program Status Protocol report (OSC 7501).
+     * See ProgramStatusReport. Konsole answers the protocol's feature query
+     * itself.
+     */
+    void programStatusReported(const Konsole::ProgramStatusReport &report);
+
+    /** Emitted when the shell reports that a new prompt begins (OSC 133 ; A). */
+    void promptStarted();
+
+    /** Emitted after a full reset of the terminal (RIS, or one the user asked for). */
+    void terminalReset();
 
     /**
      * Mainly used to communicate dropped lines to active autosave tasks.

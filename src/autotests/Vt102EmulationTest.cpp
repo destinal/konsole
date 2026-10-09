@@ -908,6 +908,103 @@ void Vt102EmulationTest::testTabStatusSequence()
     QCOMPARE(updates.at(1), TabStatusUpdate::fromOsc21337(u"status=;indicator="));
 }
 
+void Vt102EmulationTest::testProgramStatusParsing()
+{
+    auto parse = [](const char *body) {
+        return ProgramStatusReport::parse(QString::fromUtf8(body));
+    };
+    auto b64 = [](const char *text) {
+        return QString::fromLatin1(QByteArray(text).toBase64());
+    };
+
+    // Every field. Text is base64, padding optional.
+    auto report = parse("state=blocked:kind=permission:id=agent/7:progress=40:app=claude-code:title=VG9vbA:msg=QWxsb3cgQmFzaD8=");
+    QVERIFY(report.has_value());
+    QCOMPARE(report->state, ProgramStatusReport::Blocked);
+    QCOMPARE(report->kind, std::optional(ProgramStatusReport::Permission));
+    QCOMPARE(report->id, (QStringList{QStringLiteral("agent"), QStringLiteral("7")}));
+    QCOMPARE(report->progress, std::optional(40));
+    QCOMPARE(report->app, QStringLiteral("claude-code"));
+    QCOMPARE(report->title, QStringLiteral("Tool"));
+    QCOMPARE(report->msg, QStringLiteral("Allow Bash?"));
+
+    // Whitespace is stripped, malformed pairs are skipped, unknown keys ignored, the last value wins.
+    report = parse(" state = idle :garbage:Bad=1:foo=bar:state=working");
+    QCOMPARE(report->state, ProgramStatusReport::Working);
+    QVERIFY(report->id.isEmpty());
+
+    // kind only with blocked; progress only with working or blocked, 0-100.
+    QVERIFY(!parse("state=working:kind=auth")->kind.has_value());
+    QVERIFY(!parse("state=blocked:kind=nope")->kind.has_value());
+    QVERIFY(!parse("state=done:progress=50")->progress.has_value());
+    QVERIFY(!parse("state=working:progress=101")->progress.has_value());
+    QVERIFY(!parse("state=working:progress=-1")->progress.has_value());
+    QCOMPARE(parse("state=working:progress=0")->progress, std::optional(0));
+    // An invalid app is treated as absent.
+    QVERIFY(!parse("state=idle:app=a+b/c")->app.has_value());
+    // Clear needs no other key.
+    QCOMPARE(parse("state=clear:id=x")->state, ProgramStatusReport::Clear);
+
+    // Ignored: no state, an unknown state, an invalid id (it must not fall back to the root).
+    QVERIFY(!parse("app=x").has_value());
+    QVERIFY(!parse("state=sleeping").has_value());
+    QVERIFY(!parse("state=idle:id=a//b").has_value());
+    QVERIFY(!parse("state=idle:id=a/b,c").has_value());
+    QVERIFY(!parse("state=idle:id=1/2/3/4/5/6/7/8/9").has_value());
+
+    // Discarded: text that is not base64, decodes to a control character, or
+    // breaks a limit; a key over 16 bytes.
+    QVERIFY(!parse("state=idle:msg=Zm9v_").has_value());
+    QVERIFY(!parse("state=idle:msg=a").has_value());
+    // A character outside the value grammar makes the pair malformed: skipped, not fatal.
+    QVERIFY(!parse("state=idle:msg=@@@")->msg.has_value());
+    QVERIFY(!parse(QStringLiteral("state=idle:msg=%1").arg(b64("a\nb")).toUtf8().constData()).has_value());
+    QVERIFY(!parse(QStringLiteral("state=idle:title=%1").arg(b64(QByteArray(193, 'x').constData())).toUtf8().constData()).has_value());
+    QVERIFY(!parse("state=idle:averyveryverylongkey=1").has_value());
+    QVERIFY(!ProgramStatusReport::parse(QString(QStringLiteral("state=idle:x=") + QString(4090, QLatin1Char('a')))).has_value());
+
+    QVERIFY(ProgramStatusReport::isFeatureQuery(u" ? "));
+    QVERIFY(!ProgramStatusReport::isFeatureQuery(u"state=idle"));
+}
+
+void Vt102EmulationTest::testProgramStatusSequence()
+{
+    TestEmulation em;
+    em.reset();
+    em.setCodec(TestEmulation::Utf8Codec);
+
+    QList<ProgramStatusReport> reports;
+    connect(&em, &Emulation::programStatusReported, this, [&reports](const ProgramStatusReport &report) {
+        reports.append(report);
+    });
+    QSignalSpy resets(&em, &Emulation::terminalReset);
+    auto send = [&em](const char *sequence) {
+        em.receiveData(sequence, strlen(sequence));
+    };
+
+    // The feature query is answered with the same body, and nothing else is.
+    em.lastSent.clear();
+    send("\033]7501;?\033\\");
+    QCOMPARE(em.lastSent, QByteArray("\033]7501;?\033\\"));
+    QVERIFY(reports.isEmpty());
+
+    em.lastSent.clear();
+    send("\033]7501;state=working:app=claude-code\007");
+    send("\033]7501;state=sleeping\007");
+    QCOMPARE(em.lastSent, QByteArray());
+    QCOMPARE(reports.size(), 1);
+    QCOMPARE(reports.at(0).state, ProgramStatusReport::Working);
+
+    // promptStarted (OSC 133 ; A) is not exercised here: Konsole's prompt
+    // marking needs a terminal display, which this emulation lacks.
+
+    send("\033c");
+    QCOMPARE(resets.count(), 1);
+    // A soft reset (DECSTR) is not a full reset.
+    send("\033[!p");
+    QCOMPARE(resets.count(), 1);
+}
+
 QTEST_GUILESS_MAIN(Vt102EmulationTest)
 
 #include "moc_Vt102EmulationTest.cpp"

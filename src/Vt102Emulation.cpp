@@ -193,6 +193,10 @@ void Vt102Emulation::reset(bool softReset, bool preservePrompt)
 
     Q_EMIT resetCursorStyleRequest();
 
+    if (!softReset) {
+        Q_EMIT terminalReset();
+    }
+
     bufferedUpdate();
 }
 
@@ -1194,6 +1198,9 @@ void Vt102Emulation::processSessionAttributeRequest(const int tokenSize, const u
         if (value[0] == QLatin1Char('A') || value[0] == QLatin1Char('N') || value[0] == QLatin1Char('P')) {
             _currentScreen->setReplMode(REPL_PROMPT);
         }
+        if (value[0] == QLatin1Char('A')) {
+            Q_EMIT promptStarted();
+        }
         if (value[0] == QLatin1Char('L') && _currentScreen->getCursorX() > 0) {
             _currentScreen->nextLine();
         }
@@ -1573,6 +1580,17 @@ void Vt102Emulation::processSessionAttributeRequest(const int tokenSize, const u
             _kittyNotifications.erase(toRemote);
         }
 
+        return;
+    }
+
+    // Before the generic "?" query below, which OSC 7501 answers its own way.
+    if (attribute == ProgramStatus) {
+        // The feature query's fixed reply is the only thing ever written back.
+        if (ProgramStatusReport::isFeatureQuery(value)) {
+            sendString("\033]7501;?\033\\");
+        } else if (const auto report = ProgramStatusReport::parse(value)) {
+            Q_EMIT programStatusReported(*report);
+        }
         return;
     }
 

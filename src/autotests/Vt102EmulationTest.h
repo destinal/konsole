@@ -48,6 +48,8 @@ private Q_SLOTS:
     void testSetUserVar();
     void testTabStatusParsing();
     void testTabStatusSequence();
+    void testProgramStatusParsing();
+    void testProgramStatusSequence();
 
 private:
     static void sendAndCompare(TestEmulation *em, const char *input, size_t inputLen, const QString &expectedPrint, const QByteArray &expectedSent);
