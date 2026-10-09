@@ -25,6 +25,14 @@ bool isSessionFocused(Konsole::Session *session);
 
 /** The title shown on the session's tab, or its name when it has no view. */
 QString sessionTitle(Konsole::Session *session);
+
+/**
+ * Types @p text into @p session the way a paste does: bracketed when the
+ * program asked for bracketed paste, line breaks as carriage returns, no
+ * escape characters. With @p submit, presses Return a moment later, once the
+ * program has taken the paste in.
+ */
+void pasteIntoSession(Konsole::Session *session, QString text, bool submit);
 }
 
 #endif // SESSIONNAVIGATION_H

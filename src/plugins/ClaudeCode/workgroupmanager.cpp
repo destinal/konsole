@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "workgroupmanager.h"
+#include "clippingstore.h"
+#include "sessionnavigation.h"
+#include "sessionstatus.h"
 #include "sessionstatusregistry.h"
 
 #include "ProgramStatus.h"
@@ -28,11 +31,63 @@ constexpr int exitCheckIntervalMs = 250;
 constexpr int exitCheckAttempts = 40;
 }
 
-WorkgroupManager::WorkgroupManager(SessionStatusRegistry *registry, QObject *parent)
+WorkgroupManager::WorkgroupManager(SessionStatusRegistry *registry, ClippingStore *clippings, QObject *parent)
     : QObject(parent)
+    , _registry(registry)
+    , _clippings(clippings)
     , _autoEnter(settings().readEntry("AutoEnterWorkgroup", true))
+    , _autoSend(settings().readEntry("AutoSendClippings", false))
 {
     connect(registry, &SessionStatusRegistry::programStatusReported, this, &WorkgroupManager::programStatusReported);
+    connect(registry, &SessionStatusRegistry::statusChanged, this, &WorkgroupManager::statusChanged);
+}
+
+bool WorkgroupManager::autoSend() const
+{
+    return _autoSend;
+}
+
+void WorkgroupManager::setAutoSend(bool enabled)
+{
+    if (_autoSend == enabled) {
+        return;
+    }
+    _autoSend = enabled;
+    KConfigGroup group = settings();
+    group.writeEntry("AutoSendClippings", enabled);
+    group.sync();
+    Q_EMIT autoSendChanged(enabled);
+}
+
+void WorkgroupManager::statusChanged(Konsole::Session *session, const std::optional<QString> &previousStatusText)
+{
+    Workgroup *workgroup = this->workgroup(session);
+    if (!_autoSend || workgroup == nullptr || workgroup->session(Workgroup::Review) != session) {
+        return;
+    }
+    // Only the review going from working to finished, as in iTerm2.
+    const auto lower = [](const std::optional<QString> &text) {
+        return text.value_or(QString()).toLower();
+    };
+    const QString now = lower(_registry->status(session)->statusText());
+    if (lower(previousStatusText) != QLatin1String("working")
+        || (now != QLatin1String("idle") && now != QLatin1String("done") && now != QLatin1String("error"))) {
+        return;
+    }
+    // Never into a turn that is still running.
+    Konsole::Session *chat = workgroup->session(Workgroup::Chat);
+    SessionStatus *chatStatus = chat != nullptr ? _registry->status(chat) : nullptr;
+    if (chatStatus == nullptr || lower(chatStatus->statusText()) == QLatin1String("working")) {
+        return;
+    }
+    const QList<Clipping> live = _clippings->live(chat);
+    if (live.isEmpty()) {
+        return;
+    }
+    // Archiving them is what keeps this from sending the same findings twice.
+    ClaudeCode::pasteIntoSession(chat, ClippingStore::formatted(live), true);
+    _clippings->archive(chat);
+    workgroup->show(Workgroup::Chat);
 }
 
 QString WorkgroupManager::toolsDirectory()

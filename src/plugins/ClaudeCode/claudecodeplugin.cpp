@@ -5,8 +5,11 @@
 #include "claudecodedbus.h"
 #include "claudesessionsmodel.h"
 #include "claudesessionswidget.h"
+#include "clippingstore.h"
+#include "clippingswidget.h"
 #include "konsoledebug.h"
 #include "programstatusrecords.h"
+#include "sessionnavigation.h"
 #include "sessionstatus.h"
 #include "sessionstatusregistry.h"
 #include "statusbadges.h"
@@ -32,7 +35,10 @@ struct ClaudeCodePlugin::Private {
     ClaudeSessionsModel *model = nullptr;
     StatusBadges *badges = nullptr;
     WorkgroupManager *workgroups = nullptr;
+    ClippingStore *clippings = nullptr;
     QMap<Konsole::MainWindow *, QDockWidget *> dockForWindow;
+    QMap<Konsole::MainWindow *, QDockWidget *> clippingsDockForWindow;
+    QMap<Konsole::MainWindow *, ClippingsWidget *> clippingsForWindow;
 };
 
 ClaudeCodePlugin::ClaudeCodePlugin(QObject *object, const QVariantList &args)
@@ -45,14 +51,24 @@ ClaudeCodePlugin::ClaudeCodePlugin(QObject *object, const QVariantList &args)
     priv->model = new ClaudeSessionsModel(priv->registry, this);
     new StatusNotifier(priv->registry, this);
     priv->badges = new StatusBadges(priv->registry, this);
-    priv->workgroups = new WorkgroupManager(priv->registry, this);
+    priv->clippings = new ClippingStore(this);
+    priv->workgroups = new WorkgroupManager(priv->registry, priv->clippings, this);
+
+    // New findings bring up the Clippings panel of each window showing them.
+    connect(priv->clippings, &ClippingStore::added, this, [this](Konsole::Session *owner) {
+        for (auto it = priv->clippingsForWindow.cbegin(); it != priv->clippingsForWindow.cend(); ++it) {
+            if (it.value()->owner() == owner) {
+                priv->clippingsDockForWindow.value(it.key())->show();
+            }
+        }
+    });
 
     // The session's tab shows its status as a colored dot.
     connect(priv->registry, &SessionStatusRegistry::statusChanged, this, [this](Konsole::Session *session) {
         SessionStatus *status = priv->registry->status(session);
         session->setStatusIndicator(status != nullptr && status->hasActiveStatus() ? status->indicator() : QColor());
     });
-    auto *dbus = new ClaudeCodeDBus(priv->registry, this);
+    auto *dbus = new ClaudeCodeDBus(priv->registry, priv->clippings, this);
     if (!dbus->registerObject()) {
         qCWarning(KonsoleDebug) << "Claude Code plugin could not register /ClaudeCode on D-Bus";
     }
@@ -83,16 +99,44 @@ void ClaudeCodePlugin::createWidgetsForMainWindow(Konsole::MainWindow *mainWindo
         }
     });
     priv->dockForWindow[mainWindow] = dock;
+
+    auto *clippingsDock = new QDockWidget(mainWindow);
+    clippingsDock->setWindowTitle(i18n("Claude Clippings"));
+    auto *clippingsWidget = new ClippingsWidget(priv->clippings, clippingsDock);
+    clippingsDock->setWidget(clippingsWidget);
+    clippingsDock->setObjectName(QStringLiteral("ClaudeCodeClippingsDock"));
+    clippingsDock->setAllowedAreas(Qt::DockWidgetArea::LeftDockWidgetArea | Qt::DockWidgetArea::RightDockWidgetArea);
+    mainWindow->addDockWidget(Qt::RightDockWidgetArea, clippingsDock);
+    clippingsDock->hide();
+    priv->clippingsDockForWindow[mainWindow] = clippingsDock;
+    priv->clippingsForWindow[mainWindow] = clippingsWidget;
+    // Inside a workgroup, Chat is shown by switching to it.
+    connect(clippingsWidget, &ClippingsWidget::sentToChat, this, [this](Konsole::Session *owner) {
+        if (Workgroup *workgroup = priv->workgroups->workgroup(owner)) {
+            workgroup->show(Workgroup::Chat);
+        } else {
+            ClaudeCode::activateSession(owner);
+        }
+    });
+
     connect(mainWindow, &QObject::destroyed, this, [this, mainWindow] {
         priv->dockForWindow.remove(mainWindow);
+        priv->clippingsDockForWindow.remove(mainWindow);
+        priv->clippingsForWindow.remove(mainWindow);
     });
 }
 
 void ClaudeCodePlugin::activeViewChanged(Konsole::SessionController *controller, Konsole::MainWindow *mainWindow)
 {
-    Q_UNUSED(mainWindow)
     if (controller == nullptr || controller->view() == nullptr) {
         return;
+    }
+    // The Clippings panel shows the findings of the workgroup in view, kept
+    // by its Chat session, or else those of the session itself.
+    if (ClippingsWidget *clippings = priv->clippingsForWindow.value(mainWindow)) {
+        Konsole::Session *session = controller->session();
+        Workgroup *workgroup = priv->workgroups->workgroup(session);
+        clippings->setOwner(workgroup != nullptr ? workgroup->session(Workgroup::Chat) : session);
     }
     // A key press in a session showing a finished or failed turn means the
     // user has seen it. Only the active view takes keys, so connecting here
@@ -157,6 +201,18 @@ QList<QAction *> ClaudeCodePlugin::menuBarActions(Konsole::MainWindow *mainWindo
         memberActions.append(action);
     }
 
+    QAction *clippingsAction = priv->clippingsDockForWindow[mainWindow]->toggleViewAction();
+    clippingsAction->setText(i18n("Show Claude Clippings"));
+    mainWindow->actionCollection()->addAction(QStringLiteral("claudecode-show-clippings"), clippingsAction);
+    mainWindow->actionCollection()->setDefaultShortcut(clippingsAction, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F4));
+
+    auto *autoSendAction = new QAction(i18n("Send Review Findings to Chat Automatically"), mainWindow);
+    autoSendAction->setCheckable(true);
+    autoSendAction->setChecked(priv->workgroups->autoSend());
+    mainWindow->actionCollection()->addAction(QStringLiteral("claudecode-auto-send-clippings"), autoSendAction);
+    connect(autoSendAction, &QAction::toggled, priv->workgroups, &WorkgroupManager::setAutoSend);
+    connect(priv->workgroups, &WorkgroupManager::autoSendChanged, autoSendAction, &QAction::setChecked);
+
     auto *autoEnterAction = new QAction(i18n("Enter Claude Workgroups Automatically"), mainWindow);
     autoEnterAction->setCheckable(true);
     autoEnterAction->setChecked(priv->workgroups->autoEnter());
@@ -164,7 +220,8 @@ QList<QAction *> ClaudeCodePlugin::menuBarActions(Konsole::MainWindow *mainWindo
     connect(autoEnterAction, &QAction::toggled, priv->workgroups, &WorkgroupManager::setAutoEnter);
     connect(priv->workgroups, &WorkgroupManager::autoEnterChanged, autoEnterAction, &QAction::setChecked);
 
-    return QList<QAction *>{toggleVisibilityAction, badgesAction, enterAction, exitAction} + memberActions + QList<QAction *>{autoEnterAction};
+    return QList<QAction *>{toggleVisibilityAction, clippingsAction, badgesAction, enterAction, exitAction} + memberActions
+        + QList<QAction *>{autoEnterAction, autoSendAction};
 }
 
 #include "claudecodeplugin.moc"

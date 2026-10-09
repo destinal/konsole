@@ -2,17 +2,21 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "claudecodedbus.h"
+#include "clippingstore.h"
 #include "sessionstatus.h"
 #include "sessionstatusregistry.h"
 
 #include "session/Session.h"
 
 #include <QDBusConnection>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 
-ClaudeCodeDBus::ClaudeCodeDBus(SessionStatusRegistry *registry, QObject *parent)
+ClaudeCodeDBus::ClaudeCodeDBus(SessionStatusRegistry *registry, ClippingStore *clippings, QObject *parent)
     : QObject(parent)
     , _registry(registry)
+    , _clippings(clippings)
 {
 }
 
@@ -66,6 +70,34 @@ qlonglong ClaudeCodeDBus::getBackgroundTaskCount(const QString &session)
 {
     SessionStatus *status = statusOrError(session);
     return status != nullptr ? status->backgroundTasks() : 0;
+}
+
+void ClaudeCodeDBus::addClipping(const QString &session, const QString &type, const QString &title, const QString &detail)
+{
+    if (statusOrError(session) != nullptr) {
+        _clippings->add(_registry->session(session), Clipping{type, title, detail, QDateTime::currentDateTime()});
+    }
+}
+
+void ClaudeCodeDBus::archiveClippings(const QString &session)
+{
+    if (statusOrError(session) != nullptr) {
+        _clippings->archive(_registry->session(session));
+    }
+}
+
+QString ClaudeCodeDBus::clippings(const QString &session)
+{
+    if (statusOrError(session) == nullptr) {
+        return {};
+    }
+    QJsonArray array;
+    const auto live = _clippings->live(_registry->session(session));
+    for (const Clipping &clipping : live) {
+        array.append(
+            QJsonObject{{QStringLiteral("type"), clipping.type}, {QStringLiteral("title"), clipping.title}, {QStringLiteral("detail"), clipping.detail}});
+    }
+    return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
 }
 
 SessionStatus *ClaudeCodeDBus::statusOrError(const QString &session)

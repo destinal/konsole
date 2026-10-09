@@ -9,6 +9,7 @@
 #include <QStringList>
 #include <QVariantMap>
 
+class ClippingStore;
 class SessionStatus;
 class SessionStatusRegistry;
 
@@ -27,7 +28,7 @@ class ClaudeCodeDBus : public QObject, protected QDBusContext
     Q_CLASSINFO("D-Bus Interface", "org.kde.konsole.ClaudeCode")
 
 public:
-    ClaudeCodeDBus(SessionStatusRegistry *registry, QObject *parent);
+    ClaudeCodeDBus(SessionStatusRegistry *registry, ClippingStore *clippings, QObject *parent);
 
     /** Registers the object on the session bus. Returns whether it succeeded. */
     bool registerObject();
@@ -53,10 +54,20 @@ public Q_SLOTS:
     /** Returns the background-task count cc-status last parked for the session. */
     qlonglong getBackgroundTaskCount(const QString &session);
 
+    /** Files a code review finding with @p session, as `it2 session add-clipping` does. */
+    void addClipping(const QString &session, const QString &type, const QString &title, const QString &detail);
+
+    /** Moves @p session's live clippings to its archive, as `it2 session archive-clippings` does. */
+    void archiveClippings(const QString &session);
+
+    /** Returns @p session's live clippings as a JSON array of {type, title, detail}. */
+    QString clippings(const QString &session);
+
 private:
     SessionStatus *statusOrError(const QString &session);
 
     SessionStatusRegistry *_registry;
+    ClippingStore *_clippings;
 };
 
 #endif // CLAUDECODEDBUS_H

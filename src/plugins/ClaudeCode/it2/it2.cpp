@@ -6,6 +6,8 @@
 //   it2 set-status --session=<id> [--quiet-if-unresolved] [--json] [--status=...] ...
 //   it2 session get-status --session=<id> [--quiet-if-unresolved]
 //   it2 session get-background-tasks --session=<id> [--quiet-if-unresolved]
+//   it2 session add-clipping --session=<id> TYPE TITLE DETAIL
+//   it2 session archive-clippings --session=<id>
 //
 // Each becomes a call to the Claude Code plugin's D-Bus object in Konsole.
 // The session id is what cc-status takes from $TERM_SESSION_ID, which the
@@ -66,7 +68,13 @@ struct Invocation {
     QString command;
     QHash<QString, QString> options;
     QSet<QString> flags;
+    QStringList positional;
 };
+
+const QStringList sessionCommands = {QStringLiteral("get-status"),
+                                     QStringLiteral("get-background-tasks"),
+                                     QStringLiteral("add-clipping"),
+                                     QStringLiteral("archive-clippings")};
 
 QTextStream &err()
 {
@@ -100,8 +108,7 @@ bool parse(const QStringList &arguments, Invocation *invocation)
     if (arguments.value(0) == QLatin1String("set-status")) {
         invocation->command = QStringLiteral("set-status");
         i = 1;
-    } else if (arguments.value(0) == QLatin1String("session")
-               && (arguments.value(1) == QLatin1String("get-status") || arguments.value(1) == QLatin1String("get-background-tasks"))) {
+    } else if (arguments.value(0) == QLatin1String("session") && sessionCommands.contains(arguments.value(1))) {
         invocation->command = arguments.value(1);
         i = 2;
     } else {
@@ -112,8 +119,8 @@ bool parse(const QStringList &arguments, Invocation *invocation)
     for (; i < arguments.size(); i++) {
         const QString &argument = arguments.at(i);
         if (!argument.startsWith(QLatin1String("--"))) {
-            err() << "it2: unexpected argument: " << argument << Qt::endl;
-            return false;
+            invocation->positional.append(argument);
+            continue;
         }
         const qsizetype separator = argument.indexOf(QLatin1Char('='));
         const QString name = argument.mid(2, separator < 0 ? -1 : separator - 2);
@@ -131,6 +138,15 @@ bool parse(const QStringList &arguments, Invocation *invocation)
             return false;
         }
     }
+    const int expected = invocation->command == QLatin1String("add-clipping") ? 3 : 0;
+    if (invocation->positional.size() != expected) {
+        if (expected == 0) {
+            err() << "it2: unexpected argument: " << invocation->positional.value(0) << Qt::endl;
+        } else {
+            err() << "it2: add-clipping takes TYPE TITLE DETAIL" << Qt::endl;
+        }
+        return false;
+    }
     return true;
 }
 
@@ -141,7 +157,13 @@ bool resolve(const Invocation &invocation, QString *service, QString *session)
     if (invocation.options.contains(QStringLiteral("tmux"))) {
         return false;
     }
-    const QString id = invocation.options.value(QStringLiteral("session"));
+    QString id = invocation.options.value(QStringLiteral("session"));
+    // Either what cc-status passes (the part of $TERM_SESSION_ID after its
+    // first colon) or all of $TERM_SESSION_ID, as the review prompt passes it.
+    const QLatin1String prefix("konsole:");
+    if (id.startsWith(prefix)) {
+        id.remove(0, prefix.size());
+    }
     const qsizetype path = id.indexOf(QLatin1String("/Sessions/"));
     if (path <= 0) {
         return false;
@@ -227,6 +249,12 @@ int main(int argc, char *argv[])
         }
         call = QDBusMessage::createMethodCall(service, path, interface, QStringLiteral("setStatus"));
         call << session << statusArgs;
+    } else if (invocation.command == QLatin1String("add-clipping")) {
+        call = QDBusMessage::createMethodCall(service, path, interface, QStringLiteral("addClipping"));
+        call << session << invocation.positional.at(0) << invocation.positional.at(1) << invocation.positional.at(2);
+    } else if (invocation.command == QLatin1String("archive-clippings")) {
+        call = QDBusMessage::createMethodCall(service, path, interface, QStringLiteral("archiveClippings"));
+        call << session;
     } else if (invocation.command == QLatin1String("get-status")) {
         call = QDBusMessage::createMethodCall(service, path, interface, QStringLiteral("getStatus"));
         call << session;
@@ -246,7 +274,11 @@ int main(int argc, char *argv[])
     }
 
     const QVariant result = reply.arguments().value(0);
-    if (invocation.command == QLatin1String("set-status") && !invocation.flags.contains(QStringLiteral("json"))) {
+    if (invocation.command == QLatin1String("add-clipping")) {
+        out() << "Clipping added." << Qt::endl;
+    } else if (invocation.command == QLatin1String("archive-clippings")) {
+        out() << "Clippings archived." << Qt::endl;
+    } else if (invocation.command == QLatin1String("set-status") && !invocation.flags.contains(QStringLiteral("json"))) {
         out() << "Session status updated." << Qt::endl;
     } else {
         out() << result.toString() << Qt::endl;

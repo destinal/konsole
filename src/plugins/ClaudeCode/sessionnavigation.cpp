@@ -9,8 +9,13 @@
 #include "session/SessionController.h"
 #include "terminalDisplay/TerminalDisplay.h"
 
+#include "Emulation.h"
+
 #include <KWindowSystem>
 
+#include <QKeyEvent>
+#include <QPointer>
+#include <QTimer>
 #include <QWindow>
 
 namespace ClaudeCode
@@ -45,6 +50,29 @@ bool isSessionFocused(Konsole::Session *session)
         }
     }
     return false;
+}
+
+void pasteIntoSession(Konsole::Session *session, QString text, bool submit)
+{
+    // What TerminalDisplay::doPaste does to pasted text.
+    text.replace(QLatin1String("\r\n"), QLatin1String("\r"));
+    text.replace(QLatin1Char('\n'), QLatin1Char('\r'));
+    text.remove(QLatin1Char('\033'));
+    const auto views = session->views();
+    if (!views.isEmpty() && views.first()->bracketedPasteMode()) {
+        text = QLatin1String("\033[200~") + text + QLatin1String("\033[201~");
+    }
+    session->sendTextToTerminal(text, QChar());
+
+    if (submit) {
+        // iTerm2 waits this long before submitting an automatic send.
+        QTimer::singleShot(501, session, [session = QPointer<Konsole::Session>(session)] {
+            if (session != nullptr) {
+                QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+                session->emulation()->sendKeyEvent(&enter);
+            }
+        });
+    }
 }
 
 QString sessionTitle(Konsole::Session *session)
