@@ -24,11 +24,6 @@ KConfigGroup settings()
 {
     return KSharedConfig::openConfig()->group(QStringLiteral("ClaudeCode"));
 }
-
-// After Claude Code clears its status, how often and for how long to look for
-// its exit: it may still be running its SessionEnd hooks.
-constexpr int exitCheckIntervalMs = 250;
-constexpr int exitCheckAttempts = 40;
 }
 
 WorkgroupManager::WorkgroupManager(SessionStatusRegistry *registry, ClippingStore *clippings, QObject *parent)
@@ -40,6 +35,13 @@ WorkgroupManager::WorkgroupManager(SessionStatusRegistry *registry, ClippingStor
 {
     connect(registry, &SessionStatusRegistry::programStatusReported, this, &WorkgroupManager::programStatusReported);
     connect(registry, &SessionStatusRegistry::statusChanged, this, &WorkgroupManager::statusChanged);
+    connect(registry, &SessionStatusRegistry::programLeft, this, [this](Konsole::Session *session) {
+        // Only the Chat member's Claude Code ends the workgroup.
+        Workgroup *current = workgroup(session);
+        if (current != nullptr && current->session(Workgroup::Chat) == session) {
+            exit(session);
+        }
+    });
 }
 
 bool WorkgroupManager::autoSend() const
@@ -147,21 +149,6 @@ void WorkgroupManager::setAutoEnter(bool enabled)
     Q_EMIT autoEnterChanged(enabled);
 }
 
-void WorkgroupManager::checkForExit(const QPointer<Konsole::Session> &session, int attemptsLeft)
-{
-    QTimer::singleShot(exitCheckIntervalMs, this, [this, session, attemptsLeft] {
-        if (session == nullptr || workgroup(session) == nullptr) {
-            return;
-        }
-        // Nothing but the shell left in the foreground: Claude Code is gone.
-        if (session->foregroundProcessId() == session->processId()) {
-            exit(session);
-        } else if (attemptsLeft > 1) {
-            checkForExit(session, attemptsLeft - 1);
-        }
-    });
-}
-
 void WorkgroupManager::programStatusReported(Konsole::Session *session, const Konsole::ProgramStatusReport &report)
 {
     if (!report.id.isEmpty()) {
@@ -170,14 +157,8 @@ void WorkgroupManager::programStatusReported(Konsole::Session *session, const Ko
     QPointer<Konsole::Session> guarded(session);
     Workgroup *current = workgroup(session);
 
+    // Claude Code exiting ends the workgroup through the registry's programLeft.
     if (report.state == Konsole::ProgramStatusReport::Clear) {
-        // Claude Code clears its records when it exits; a clear carries no
-        // app. Only the Chat member's Claude Code ends the workgroup, and only
-        // once nothing runs in the session's shell any more.
-        if (current == nullptr || current->session(Workgroup::Chat) != session) {
-            return;
-        }
-        checkForExit(guarded, exitCheckAttempts);
         return;
     }
 

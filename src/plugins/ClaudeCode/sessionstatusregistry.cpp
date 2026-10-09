@@ -9,6 +9,17 @@
 #include "session/Session.h"
 #include "session/SessionManager.h"
 
+#include <QTimer>
+
+namespace
+{
+// After a program clears its status, how often and for how long to look for
+// its exit: Claude Code may still be running its SessionEnd hooks, which
+// report too.
+constexpr int exitCheckIntervalMs = 250;
+constexpr int exitCheckAttempts = 40;
+}
+
 SessionStatusRegistry::SessionStatusRegistry(QObject *parent)
     : QObject(parent)
 {
@@ -65,6 +76,11 @@ void SessionStatusRegistry::track(Konsole::Session *session)
     connect(emulation, &Konsole::Emulation::programStatusReported, programStatus, &ProgramStatusController::handle);
     connect(emulation, &Konsole::Emulation::programStatusReported, this, [this, session](const Konsole::ProgramStatusReport &report) {
         Q_EMIT programStatusReported(session, report);
+        // Claude Code clears its records when it exits; a clear of a task's
+        // record (with an id) is not that.
+        if (report.id.isEmpty() && report.state == Konsole::ProgramStatusReport::Clear) {
+            checkForExit(QPointer<Konsole::Session>(session), exitCheckAttempts);
+        }
     });
     connect(emulation, &Konsole::Emulation::promptStarted, programStatus, &ProgramStatusController::promptStarted);
     connect(emulation, &Konsole::Emulation::terminalReset, programStatus, &ProgramStatusController::terminalReset);
@@ -79,6 +95,24 @@ void SessionStatusRegistry::track(Konsole::Session *session)
     connect(session, &QObject::destroyed, this, [this, session] {
         // The status owns its program status controller.
         delete _sessions.take(session).status;
+    });
+}
+
+void SessionStatusRegistry::checkForExit(const QPointer<Konsole::Session> &session, int attemptsLeft)
+{
+    QTimer::singleShot(exitCheckIntervalMs, this, [this, session, attemptsLeft] {
+        if (session == nullptr || !_sessions.contains(session)) {
+            return;
+        }
+        // Nothing but the shell left in the foreground: the program is gone,
+        // and what its hooks said last (idle, mostly) is no longer about
+        // anything.
+        if (session->foregroundProcessId() == session->processId()) {
+            status(session)->clearStatus();
+            Q_EMIT programLeft(session);
+        } else if (attemptsLeft > 1) {
+            checkForExit(session, attemptsLeft - 1);
+        }
     });
 }
 

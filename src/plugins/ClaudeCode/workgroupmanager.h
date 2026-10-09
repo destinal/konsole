@@ -60,7 +60,6 @@ Q_SIGNALS:
 
 private:
     void programStatusReported(Konsole::Session *session, const Konsole::ProgramStatusReport &report);
-    void checkForExit(const QPointer<Konsole::Session> &session, int attemptsLeft);
     void statusChanged(Konsole::Session *session, const std::optional<QString> &previousStatusText);
 
     SessionStatusRegistry *_registry;

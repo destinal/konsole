@@ -6,6 +6,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 
 #include <optional>
@@ -51,8 +52,17 @@ Q_SIGNALS:
     /** @p session's program sent a Program Status Protocol report (OSC 7501). */
     void programStatusReported(Konsole::Session *session, const Konsole::ProgramStatusReport &report);
 
+    /**
+     * The program reporting in @p session over OSC 7501, Claude Code above
+     * all, cleared its status and exited, leaving only the shell. Its status
+     * has been cleared too, so the session no longer counts as a Claude Code
+     * session.
+     */
+    void programLeft(Konsole::Session *session);
+
 private:
     void track(Konsole::Session *session);
+    void checkForExit(const QPointer<Konsole::Session> &session, int attemptsLeft);
 
     struct Tracked {
         SessionStatus *status;
