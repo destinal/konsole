@@ -90,6 +90,9 @@ Q_SIGNALS:
      */
     void sessionUpdated(Session *session);
 
+    /** Emitted after createSession() creates @p session. */
+    void sessionCreated(Session *session);
+
 protected Q_SLOTS:
     /**
      * Called to inform the manager that a session has finished executing.

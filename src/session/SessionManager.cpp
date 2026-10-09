@@ -108,6 +108,8 @@ Session *SessionManager::createSession(Profile::Ptr profile)
     _sessions << session;
     _sessionProfiles.insert(session, profile);
 
+    Q_EMIT sessionCreated(session);
+
     return session;
 }
 
