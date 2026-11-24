@@ -77,7 +77,8 @@ def save(path, settings):
     # Write and rename, so Claude Code never reads a half-written file.
     fd, temporary = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".settings.", suffix=".json")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2)
+        # Keep characters like "—" as they are, not as — escapes.
+        json.dump(settings, f, indent=2, ensure_ascii=False)
         f.write("\n")
     if os.path.exists(path):
         shutil.copymode(path, temporary)
